@@ -39,9 +39,12 @@ import torch
 import transformers
 import yaml
 from huggingface_hub import hf_hub_download
+from packaging.version import Version
 
 if sys.version_info < (3, 10):
     raise SystemExit("Este projeto exige Python 3.10 ou superior")
+if not Version("4.45") <= Version(transformers.__version__) < Version("5"):
+    raise SystemExit("Transformers precisa estar no intervalo >=4.45,<5")
 cfg = yaml.safe_load(open(sys.argv[1], encoding="utf-8"))
 name = cfg["model"]["name"]
 revision = cfg["model"]["revision"]
