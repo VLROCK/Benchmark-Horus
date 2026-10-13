@@ -13,7 +13,7 @@
 set -euo pipefail
 
 cd "${SLURM_SUBMIT_DIR:?Submit this job from the repository root}"
-python_bin="${HORUS_PYTHON_BIN:-$HOME/miniconda3/envs/horus_eval/bin/python}"
+python_bin="${HORUS_PYTHON_BIN:-$HOME/miniconda3/envs/horus_theme/bin/python}"
 test -x "$python_bin"
 export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
 
