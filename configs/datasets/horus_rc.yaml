@@ -1,0 +1,49 @@
+schema_version: 1
+dataset_id: horus-release-candidate
+dataset_version: provisional-workspace-snapshot-v0
+status: provisional
+workspace_root: ../..
+manifest: data/manifests/horus_rc_v0.yaml
+schema_manifest: data/manifests/horus_rc_schema.yaml
+
+resources:
+  corpus:
+    path: horus_release_candidate/data/all.parquet
+    format: parquet
+    role: processed_canonical_corpus
+    expected_rows: 183911
+    immutable: true
+  train:
+    path: horus_release_candidate/data/train.parquet
+    format: parquet
+    role: derived_split
+    split: train
+    expected_rows: 147252
+    immutable: true
+  validation:
+    path: horus_release_candidate/data/validation.parquet
+    format: parquet
+    role: derived_split
+    split: validation
+    expected_rows: 18263
+    immutable: true
+  test:
+    path: horus_release_candidate/data/test.parquet
+    format: parquet
+    role: derived_split
+    split: test
+    expected_rows: 18396
+    immutable: true
+  benchmark_balanced:
+    path: horus_release_candidate/data/benchmark_balanced.parquet
+    format: parquet
+    role: experimental_benchmark
+    expected_rows: 101176
+    immutable: true
+  taxonomy:
+    path: themes_full_dataset.csv
+    format: csv
+    role: synthetic_generation_taxonomy
+    expected_rows: 665
+    immutable: true
+

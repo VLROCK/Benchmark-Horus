@@ -1,0 +1,39 @@
+schema_version: 1
+experiment_id: human-theme-validation-v1
+workspace_root: ../../../..
+dataset_config: configs/datasets/horus_full.yaml
+corpus_resource: corpus
+train_resource: train
+validation_resource: validation
+taxonomy_resource: taxonomy
+manual_mapping: experiments/01_quality_audit/human_theme_validation/configs/manual_theme_map.csv
+output_root: results/theme_validation
+seed: 2026
+batch_size: 256
+materialize_batch_size: 8192
+sampling:
+  pilot_per_area: 20
+  random_per_area: 100
+  second_annotator_per_area: 50
+  diagnostic_total: 200
+  synthetic_review_per_area_generator: 2
+baseline:
+  max_features: 100000
+  min_df: 2
+  c: 1.0
+model:
+  name: neuralmind/bert-base-portuguese-cased
+  revision: main
+  heldout_generator: null
+  max_length: 512
+  train_batch_size: 16
+  inference_batch_size: 32
+  epochs: 3
+  learning_rate: 0.00002
+  weight_decay: 0.01
+  patience: 1
+  device: auto
+threshold:
+  target_precision: 0.90
+  min_accepted_calibration: 30
+  wilson_confidence: 0.95

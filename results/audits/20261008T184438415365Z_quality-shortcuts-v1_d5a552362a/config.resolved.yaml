@@ -1,0 +1,43 @@
+batch_size: 2048
+benchmark_resource: benchmark_balanced
+corpus_resource: corpus
+dataset_config: configs/datasets/horus_rc.yaml
+experiment_id: quality-shortcuts-v1
+length_bins_words:
+- 0
+- 150
+- 400
+- 800
+- 1800
+- 5000
+lineage_fields: []
+near_duplicates:
+  bottom_k: 32
+  containment_threshold: 0.9
+  enabled: true
+  jaccard_threshold: 0.8
+  max_pair_comparisons: 20000000
+  max_postings_per_fingerprint: 80
+  min_tokens: 30
+  minimum_shared_fingerprints: 6
+  shingle_words: 5
+output_root: results/audits
+probes:
+  bootstrap_confidence: 0.95
+  bootstrap_replicates: 200
+  enabled: true
+  text_probe:
+    enabled: true
+    max_features: 100000
+    max_test_per_label: 1500
+    max_train_per_label: 5000
+    max_validation_per_label: 1500
+    min_df: 3
+schema_version: 1
+seed: 2026
+split_resources:
+- train
+- validation
+- test
+taxonomy_resource: taxonomy
+workspace_root: ../..

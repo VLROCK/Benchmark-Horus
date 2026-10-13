@@ -1,0 +1,114 @@
+manifest_schema_version: 1
+dataset_id: horus-release-candidate
+dataset_version: provisional-workspace-snapshot-v0
+inspected_at: 2026-10-08
+status: provisional
+immutable_snapshot_path: horus_release_candidate
+public_redistribution_ready: false
+raw_source_files_present: false
+notes:
+  - O identificador de versao acima foi atribuido localmente por este workspace; nao e um release oficial de publicacao.
+  - O snapshot contem todos os arquivos atualmente disponibilizados, mas nao e a versao final de publicacao.
+  - Incorporacoes futuras, inclusive novas geracoes Claude quando disponibilizadas, devem criar outra versao e outro manifesto.
+  - Os caminhos CSV originais aparecem em audit/source_inventory.csv, mas esses arquivos-fonte nao estao presentes neste workspace.
+  - Corpus completo, splits e benchmark balanceado sao recursos distintos.
+  - O snapshot importado nao deve ser sobrescrito; correcoes devem produzir uma nova versao derivada.
+
+files:
+  taxonomy:
+    path: themes_full_dataset.csv
+    role: synthetic_generation_taxonomy
+    format: csv
+    bytes: 40120
+    rows: 665
+    modified_utc: "2026-07-27T16:53:13.7977836Z"
+    sha256: e056775eebf8044ac97a5bb480b19e7fb139b7c74a3d894b0cb072f095591ddc
+  corpus:
+    path: horus_release_candidate/data/all.parquet
+    role: processed_canonical_corpus
+    format: parquet
+    bytes: 383694473
+    rows: 183911
+    row_groups: 1
+    compression: ZSTD
+    modified_utc: "2026-09-22T18:56:23.4065321Z"
+    sha256: 8168ec888c8810d3b9411711e4abe1cf187248e77b2834a3f8b11dc10444f56e
+  train:
+    path: horus_release_candidate/data/train.parquet
+    role: derived_split
+    format: parquet
+    bytes: 306993371
+    rows: 147252
+    row_groups: 1
+    compression: ZSTD
+    modified_utc: "2026-09-22T18:56:27.9230239Z"
+    sha256: f0e7d13f905fad17933bda94244b36def43a771ae188278a7e0d00bc0819640e
+  validation:
+    path: horus_release_candidate/data/validation.parquet
+    role: derived_split
+    format: parquet
+    bytes: 38402688
+    rows: 18263
+    row_groups: 1
+    compression: ZSTD
+    modified_utc: "2026-09-22T18:56:28.4131884Z"
+    sha256: a66d83a3fdf1565f524ea5b18ef2d87a7be48a3beb373f93c7fc09addcce9327
+  test:
+    path: horus_release_candidate/data/test.parquet
+    role: derived_split
+    format: parquet
+    bytes: 38792800
+    rows: 18396
+    row_groups: 1
+    compression: ZSTD
+    modified_utc: "2026-09-22T18:56:28.8598251Z"
+    sha256: d229f648e5e4d317be19fd11008b4528056587eafbc60fe4f05df3409c4ae619
+  benchmark_balanced:
+    path: horus_release_candidate/data/benchmark_balanced.parquet
+    role: experimental_benchmark
+    format: parquet
+    bytes: 150973164
+    rows: 101176
+    row_groups: 1
+    compression: ZSTD
+    modified_utc: "2026-09-22T18:56:30.4509449Z"
+    sha256: 89c84faa69d42a1b14d5fa541365712fdf90398f9d34f9f9c54a4e4fffcf94cd
+
+corpus_counts:
+  total: 183911
+  labels:
+    human: 97659
+    synthetic: 86252
+  benchmark_eligible:
+    true: 182380
+    false: 1531
+  splits:
+    train: 147252
+    validation: 18263
+    test: 18396
+  domains:
+    academic: 28188
+    informational: 24705
+    journalistic: 35740
+    juridical: 30379
+    literary: 22423
+    social: 42476
+  generators:
+    claude_haiku_4_5: 2492
+    claude_sonnet_5: 1260
+    deepseek_r1_qwen_32b: 7500
+    gemma_4_31b_it: 15000
+    gpt_oss_120b: 7500
+    gpt_oss_20b: 7500
+    llama_3_3_70b: 15000
+    qwen3_next_80b_a3b: 15000
+    sabia_4: 7500
+    sabiazinho_4: 7500
+
+validated_invariants:
+  record_id_unique: true
+  split_record_id_pairwise_overlap: 0
+  split_union_matches_corpus: true
+  all_parquet_schemas_equal: true
+  synthetic_taxonomy_rows_unmatched: 0
+

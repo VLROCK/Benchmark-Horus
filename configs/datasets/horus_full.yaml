@@ -1,0 +1,38 @@
+schema_version: 1
+dataset_id: horus-full-corpus
+dataset_version: complete-with-claude-provisional-v1
+status: provisional
+workspace_root: ../..
+manifest: data/manifests/horus_full_v1.yaml
+schema_manifest: data/manifests/horus_rc_schema.yaml
+resources:
+  corpus:
+    path: dataset_final_completo/data/all.parquet
+    format: parquet
+    role: processed_canonical_corpus
+    expected_rows: 195154
+    immutable: true
+  train:
+    path: dataset_final_completo/data/train.parquet
+    format: parquet
+    role: derived_split
+    expected_rows: 156313
+    immutable: true
+  validation:
+    path: dataset_final_completo/data/validation.parquet
+    format: parquet
+    role: derived_split
+    expected_rows: 19323
+    immutable: true
+  test:
+    path: dataset_final_completo/data/test.parquet
+    format: parquet
+    role: derived_split
+    expected_rows: 19518
+    immutable: true
+  taxonomy:
+    path: themes_full_dataset.csv
+    format: csv
+    role: synthetic_generation_taxonomy
+    expected_rows: 665
+    immutable: true

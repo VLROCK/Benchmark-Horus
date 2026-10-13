@@ -1,0 +1,51 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "horus-benchmark"
+version = "0.1.0"
+description = "Infraestrutura reprodutivel para auditoria e avaliacao do benchmark Horus."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.26",
+  "pyarrow>=17",
+  "PyYAML>=6",
+]
+
+[project.optional-dependencies]
+audit = [
+  "matplotlib>=3.8",
+  "pandas>=2.2",
+  "scikit-learn>=1.5",
+]
+dev = [
+  "pytest>=8",
+  "matplotlib>=3.8",
+  "pandas>=2.2",
+  "scikit-learn>=1.5",
+]
+theme = [
+  "pandas>=2.2",
+  "scikit-learn>=1.5",
+  "torch>=2.2",
+  "transformers>=4.45,<5",
+  "safetensors>=0.4",
+]
+
+[project.scripts]
+horus-data = "horus_benchmark.cli:main"
+horus-audit = "horus_benchmark.audit.cli:main"
+horus-theme = "horus_benchmark.audit.theme_cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/horus_benchmark"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]
+markers = [
+  "integration: checks that require the local Horus release snapshot",
+]
+

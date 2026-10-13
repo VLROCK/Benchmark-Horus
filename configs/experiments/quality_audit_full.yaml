@@ -1,0 +1,39 @@
+schema_version: 1
+experiment_id: quality-shortcuts-full-v1
+workspace_root: ../..
+dataset_config: configs/datasets/horus_full.yaml
+corpus_resource: corpus
+split_resources: [train, validation, test]
+# O corpus completo ainda não possui um benchmark balanceado materializado.
+benchmark_resource: null
+taxonomy_resource: taxonomy
+# Preencher apenas com IDs reais de documento-pai presentes no schema futuro.
+lineage_fields: []
+output_root: results/audits
+seed: 2026
+batch_size: 2048
+
+# Iguais aos da auditoria anterior para manter o protocolo comparável.
+# Estes valores são diagnósticos; não selecionam nem alteram registros.
+length_bins_words: [0, 150, 400, 800, 1800, 5000]
+near_duplicates:
+  enabled: true
+  shingle_words: 5
+  bottom_k: 32
+  minimum_shared_fingerprints: 6
+  max_postings_per_fingerprint: 80
+  max_pair_comparisons: 20000000
+  jaccard_threshold: 0.80
+  containment_threshold: 0.90
+  min_tokens: 30
+probes:
+  enabled: true
+  bootstrap_replicates: 200
+  bootstrap_confidence: 0.95
+  text_probe:
+    enabled: true
+    max_train_per_label: 5000
+    max_validation_per_label: 1500
+    max_test_per_label: 1500
+    max_features: 100000
+    min_df: 3

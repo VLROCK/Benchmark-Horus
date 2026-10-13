@@ -1,0 +1,20 @@
+schema_version: 1
+experiment_id: structural-validation
+description: Verifica arquivos, contagens e schemas sem alterar ou analisar o conteudo textual.
+seed: 2026
+dataset_config: configs/datasets/horus_rc.yaml
+resources:
+  - corpus
+  - train
+  - validation
+  - test
+  - benchmark_balanced
+  - taxonomy
+checks:
+  file_exists: true
+  expected_row_count: true
+  declared_schema: true
+  split_record_id_disjointness: true
+  split_union_matches_corpus: true
+  synthetic_taxonomy_coverage: true
+
