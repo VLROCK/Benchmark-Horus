@@ -200,6 +200,8 @@ def _predictions(context: ThemeContext, path: Path) -> pd.DataFrame:
 
 
 def export_review_sample(context: ThemeContext, predictions_path: Path, pilot: Path) -> Path:
+    if context.config["sampling"].get("protocol") == "fixed_120":
+        raise ValueError("O protocolo fixed_120 usa o piloto como amostra final; nao gere outra amostra")
     predictions = _predictions(context, predictions_path)
     pilot_meta = read_run_metadata(pilot)
     if pilot_meta["dataset_version"] != context.catalog.dataset_version:
@@ -381,12 +383,206 @@ def _metrics(frame: pd.DataFrame, threshold: float, confidence: float) -> dict[s
     }
 
 
+def _area_stratified_kappa(paired: pd.DataFrame) -> float | None:
+    """Chance agreement is calculated within each known broad area."""
+    if paired.empty:
+        return None
+    observed = 0.0
+    expected = 0.0
+    for _, group in paired.groupby("broad_area"):
+        weight = len(group) / len(paired)
+        first = group["theme_human_primary"]
+        second = group["theme_human_second"]
+        observed += weight * float((first == second).mean())
+        p_first = first.value_counts(normalize=True)
+        p_second = second.value_counts(normalize=True)
+        expected += weight * float(sum(
+            p_first.get(theme, 0.0) * p_second.get(theme, 0.0)
+            for theme in set(p_first.index) | set(p_second.index)
+        ))
+    return float((observed - expected) / (1 - expected)) if expected < 1 else None
+
+
+def evaluate_fixed_pilot(
+    context: ThemeContext, predictions_path: Path, pilot_path: Path,
+    primary_path: Path, second_path: Path,
+    baseline_predictions_path: Path | None = None,
+) -> Path:
+    """Evaluate the fixed 120-text sample without tuning on human labels."""
+    sampling = context.config["sampling"]
+    policy = context.config["threshold"]
+    if sampling.get("protocol") != "fixed_120" or policy.get("policy") != "fixed":
+        raise ValueError("This command requires the fixed_120 protocol and fixed threshold")
+    threshold = float(policy["fixed_probability"])
+    confidence = float(policy["wilson_confidence"])
+    if not 0 < threshold < 1 or not 0 < confidence < 1:
+        raise ValueError("Invalid fixed threshold configuration")
+    if primary_path.expanduser().resolve() == second_path.expanduser().resolve():
+        raise ValueError("The two annotators must use different CSV files")
+    predictions = _predictions(context, predictions_path)
+    validate_artifact_context(context, pilot_path)
+    pilot_meta = read_run_metadata(pilot_path)
+    corpus_path = context.catalog.resource(context.config["corpus_resource"]).path
+    if (pilot_meta["dataset_version"] != context.catalog.dataset_version
+            or pilot_meta["extra"].get("corpus_sha256") != sha256_file(corpus_path)):
+        raise ValueError("Pilot does not match the current corpus")
+    pilot = pd.read_csv(pilot_path, dtype=str, keep_default_na=False, encoding="utf-8-sig")
+    expected = int(sampling["pilot_per_area"]) * len(context.taxonomy)
+    if (expected != 120 or len(pilot) != 120 or pilot["record_id"].duplicated().any()
+            or pilot.groupby("broad_area").size().to_dict() != {
+                area: 20 for area in context.taxonomy
+            }):
+        raise ValueError("The fixed sample must contain 120 unique texts, 20 per area")
+    ids = set(pilot["record_id"])
+    selected = predictions.loc[predictions["record_id"].isin(ids)].copy()
+    if len(selected) != 120 or set(selected["record_id"]) != ids:
+        raise ValueError("Pilot IDs are missing from human predictions")
+    primary = _annotation(primary_path, context, ids)
+    second = _annotation(second_path, context, ids)
+    for annotation_path in (primary_path, second_path):
+        sheet = pd.read_csv(
+            annotation_path, dtype=str, keep_default_na=False, encoding="utf-8-sig",
+        )
+        if "content" not in sheet.columns:
+            raise ValueError(f"Annotation sheet lacks the original text: {annotation_path}")
+        comparison = pilot[["record_id", "content"]].merge(
+            sheet[["record_id", "content"]], on="record_id",
+            suffixes=("_pilot", "_annotation"), validate="one_to_one",
+        )
+        if (len(comparison) != 120 or not comparison["content_pilot"].equals(
+                comparison["content_annotation"]
+        )):
+            raise ValueError(f"Annotation text differs from pilot: {annotation_path}")
+    paired = primary.merge(second, on=["record_id", "broad_area"],
+                           suffixes=("_primary", "_second"), validate="one_to_one")
+    if len(paired) != 120:
+        raise ValueError("The two annotators did not classify the same 120 texts")
+    paired = paired.reset_index(drop=True)
+    kappa = _area_stratified_kappa(paired)
+    rng = np.random.default_rng(int(context.config["seed"]) + 3)
+    strata = [group.index.to_numpy() for _, group in paired.groupby("broad_area")]
+    kappas = []
+    for _ in range(1000):
+        drawn = np.concatenate([rng.choice(index, len(index), replace=True) for index in strata])
+        value = _area_stratified_kappa(paired.iloc[drawn])
+        if value is not None and np.isfinite(value):
+            kappas.append(value)
+    agreed = int((paired["theme_human_primary"] == paired["theme_human_second"]).sum())
+    agreement_low, agreement_high = _wilson(agreed, 120, confidence)
+    agreement = {
+        "rows": 120,
+        "raw_agreement": agreed / 120,
+        "raw_agreement_ci_low": agreement_low,
+        "raw_agreement_ci_high": agreement_high,
+        "cohen_kappa_global": float(cohen_kappa_score(
+            paired["broad_area"] + "::" + paired["theme_human_primary"],
+            paired["broad_area"] + "::" + paired["theme_human_second"],
+        )),
+        "cohen_kappa_area_stratified": kappa,
+        "kappa_bootstrap_95": (
+            [float(value) for value in np.quantile(kappas, [0.025, 0.975])]
+            if kappas else None
+        ),
+        "method": "Chance agreement within each broad area; 1000 area-stratified bootstrap draws",
+    }
+    joined = selected.merge(primary, on=["record_id", "broad_area"], validate="one_to_one")
+    if len(joined) != 120:
+        raise ValueError("Primary annotation areas do not match predictions")
+    joined = joined.merge(
+        second.rename(columns={"theme_human": "theme_human_second"}),
+        on=["record_id", "broad_area"], validate="one_to_one",
+    )
+    if len(joined) != 120:
+        raise ValueError("Second annotation areas do not match predictions")
+    if baseline_predictions_path is not None:
+        validate_artifact_context(context, baseline_predictions_path)
+        baseline_meta = read_run_metadata(baseline_predictions_path)
+        if baseline_meta["extra"].get("corpus_sha256") != sha256_file(corpus_path):
+            raise ValueError("Baseline predictions came from another corpus")
+        baseline = pd.read_parquet(baseline_predictions_path)
+        if baseline["record_id"].duplicated().any():
+            raise ValueError("Baseline predictions contain duplicate IDs")
+        joined = joined.merge(
+            baseline[["record_id", "broad_area", "theme_baseline"]],
+            on=["record_id", "broad_area"], validate="one_to_one",
+        )
+        if len(joined) != 120:
+            raise ValueError("Baseline predictions are missing sampled texts")
+    second_view = joined.assign(theme_human=joined["theme_human_second"])
+    consensus = joined.loc[joined["theme_human"] == joined["theme_human_second"]]
+    report = {
+        "sample": {
+            "unique_texts": 120, "per_area": 20, "human_decisions": 240,
+            "source_stratified": False,
+            "note": "Area-balanced random sample; no per-theme or per-source guarantee",
+        },
+        "threshold": {
+            "policy": "fixed_before_human_evaluation", "probability": threshold,
+            "note": "Softmax scores are not calibrated; threshold does not guarantee precision",
+        },
+        "human_human_agreement": agreement,
+        "model_vs_primary": _metrics(joined, threshold, confidence),
+        "model_vs_second": _metrics(second_view, threshold, confidence),
+        "model_vs_primary_by_area": {
+            area: _metrics(group, threshold, confidence)
+            for area, group in joined.groupby("broad_area")
+        },
+        "model_only_vs_primary": _metrics(
+            joined.loc[joined["mapped_theme"].isna()], threshold, confidence,
+        ),
+        "manual_mapping_vs_primary": _metrics(
+            joined.loc[joined["mapped_theme"].notna()], threshold, confidence,
+        ),
+        "consensus_diagnostic": {
+            "rows": len(consensus),
+            "model_vs_consensus": _metrics(consensus, threshold, confidence),
+            "note": "Agreement-selected subset; not an unbiased accuracy estimate",
+        },
+        "forced_model_accuracy_primary": float(
+            (joined["theme_predicted"] == joined["theme_human"]).mean()
+        ),
+        "forced_model_accuracy_second": float(
+            (joined["theme_predicted"] == joined["theme_human_second"]).mean()
+        ),
+    }
+    if baseline_predictions_path is not None:
+        report["forced_baseline_accuracy_primary"] = float(
+            (joined["theme_baseline"] == joined["theme_human"]).mean()
+        )
+    run = context.new_run("evaluate-fixed-120", extra={
+        "corpus_sha256": sha256_file(corpus_path),
+        "pilot_sha256": sha256_file(pilot_path),
+        "predictions_sha256": sha256_file(predictions_path),
+        "primary_annotation_sha256": sha256_file(primary_path),
+        "second_annotation_sha256": sha256_file(second_path),
+        "baseline_predictions_sha256": (
+            sha256_file(baseline_predictions_path) if baseline_predictions_path else None
+        ),
+    })
+    detail = ["record_id", "broad_area", "source_name", "theme_human",
+              "theme_human_second", "mapped_theme", "theme_predicted", "top_probability"]
+    if baseline_predictions_path is not None:
+        detail.append("theme_baseline")
+    joined[detail].to_csv(run.directory / "human_evaluation_rows.csv", index=False, encoding="utf-8-sig")
+    paired.loc[paired["theme_human_primary"] != paired["theme_human_second"]].to_csv(
+        run.directory / "annotator_disagreements.csv", index=False, encoding="utf-8-sig",
+    )
+    run.write_result("evaluation", report)
+    return run.write_result("threshold", {
+        "policy": "fixed_before_human_evaluation", "threshold": threshold,
+        "predictions_sha256": sha256_file(predictions_path),
+        "evaluation_run_id": run.run_id,
+    })
+
+
 def evaluate_annotations(
     context: ThemeContext, predictions_path: Path, sample_manifest: Path,
     primary_path: Path, second_path: Path | None = None,
     adjudicated_path: Path | None = None,
     baseline_predictions_path: Path | None = None,
 ) -> Path:
+    if context.config["sampling"].get("protocol") == "fixed_120":
+        raise ValueError("Use evaluate-fixed with the 120-text protocol")
     predictions = _predictions(context, predictions_path)
     validate_artifact_context(context, sample_manifest)
     sample_meta = json.loads((sample_manifest.parent / "run.json").read_text(encoding="utf-8"))

@@ -45,30 +45,23 @@ do classificador como verdade fundamental.
    `theme` original humano e demais metadados não são features. A tokenização
    trunca ao início de 512 tokens; isto é uma limitação para textos longos e
    deve ser verificado no erro por faixa de comprimento.
-5. O piloto contém 20 humanos por área (120). A amostra principal contém 100
-   humanos aleatórios por área (600), com alocação proporcional entre fontes
-   humanas dentro de cada área e pelo menos um texto por fonte. Se houver
-   mais fontes que vagas em uma área, a amostragem pede aumento da cota em
-   configuração. O piloto é excluído. Metade é fixada como
-   calibração e metade como avaliação. Outros 200 casos diagnósticos priorizam
-   baixa confiança e temas previstos raros; não entram na estimativa de
-   distribuição do corpus. O segundo anotador, se disponível, recebe 20 dos
-   100 textos aleatórios por área (120 em comum), divididos entre calibração
-   e avaliação. Essa cota permite estimar a concordância global, com incerteza
-   relevante; resultados por área e por tema são apenas diagnósticos.
+5. Há uma única amostra humana de 120 textos, sorteada previamente com 20 por
+   área. O arquivo inicialmente chamado `pilot_annotation.csv` passa a ser a
+   amostra final de auditoria; os quatro rótulos já registrados são mantidos.
+   Os dois anotadores classificam independentemente os mesmos 120 textos,
+   totalizando 240 decisões. Não há segunda amostra nem casos diagnósticos
+   adicionais. A seleção é uniforme dentro da área, sem estratificação por
+   fonte; logo, conclusões por fonte e por tema são exploratórias.
 6. Os anotadores recebem somente `record_id`, área e texto, além de campos
    vazios para resposta e observação. Não recebem tema bruto, sugestão do
    modelo, confiança nem o papel amostral. Devem escolher um único tema
-   predominante da área ou `incerto` / `fora_taxonomia`. As divergências entre
-   dois humanos podem ser adjudicadas em um terceiro CSV.
-7. O limiar é único para os seis modelos. Ele é escolhido apenas nos casos
-   **sem mapeamento direto** da metade de calibração. Seleciona a maior
-   cobertura cuja cota inferior de Wilson de 95% para precisão alcança 0,90,
-   com pelo menos 30 previsões aceitas. Caso nenhuma opção satisfaça a regra,
-   o modelo se abstém de todos os casos; mapeamentos explícitos continuam.
-   As probabilidades softmax não são tratadas como calibradas. A avaliação
-   independente informa precisão e cobertura por área; o limiar global não
-   garante precisão por área ou por tema.
+   predominante da área ou `incerto` / `fora_taxonomia`. Divergências são
+   relatadas; não há adjudicação obrigatória nem rótulo de consenso inventado.
+7. O limiar de probabilidade é **0,95**, fixado antes da comparação com as
+   anotações humanas. Nenhum dos 120 rótulos escolhe ou ajusta esse limiar.
+   Todas as 120 linhas servem para avaliar concordância e precisão/cobertura
+   observadas. Softmax não é calibrado: 0,95 não garante 95% nem 90% de
+   precisão humana. Intervalos de Wilson acompanham as estimativas.
 8. O corpus derivado preserva o valor original em `theme_original`; a coluna
    `theme` passa a conter o tema canônico ou `incerto`. São acrescentados
    `theme_canonical`, `theme_assignment_method`, `theme_model_prediction`,
@@ -149,7 +142,7 @@ seis conversões diretas, enquanto `Política`, `Artigo de Blog` e outros valore
 abrangem vários temas ou representam formato. Jurídica não tem `theme` humano
 preenchido. O inventário completo permite conferir cada valor e sua frequência.
 
-### Etapas computacionais
+### Etapas computacionais do protocolo de 120 textos
 
 Instale as dependências no ambiente desejado e rode os comandos **nesta ordem**.
 Nenhum estágio é executado automaticamente pela implementação. `train` faz
@@ -166,24 +159,20 @@ $inventory = horus-theme --config $cfg inventory
 ```
 
 Examine `human_theme_inventory.csv` e `taxonomy_themes.csv` no diretório
-impresso. O mapa manual já foi preenchido a partir do levantamento acima;
-revise-o à luz da anotação piloto. Depois de iniciar as previsões,
-**congele esse mapa**: os estágios seguintes recusam artefatos feitos com
-outra versão dele.
+impresso. O mapa manual já foi preenchido. Congele a taxonomia e o mapa antes
+de comparar previsões com respostas humanas. Nenhuma das 120 respostas deve
+ser usada para escolher o limiar ou revisar o mapa e depois ser chamada de
+avaliação independente.
 
-```powershell
-$pilot = horus-theme --config $cfg pilot
-```
+Para **esta rodada**, use o `pilot_annotation.csv` já existente com quatro
+respostas. O atalho abaixo escolhe a folha com mais respostas e a retoma;
+**não execute `horus-theme ... pilot` novamente** para continuar a anotação.
+O comando `pilot` serve apenas para uma reprodução nova, com outros arquivos
+de saída.
 
-Para anotar o piloto em uma interface local, com um texto por vez e opções
-clicáveis da área correspondente:
-
-```powershell
-horus-theme --config $cfg annotate-web --sheet $pilot
-```
-
-Em Windows, o atalho abaixo **retoma** o piloto local com mais respostas já
-salvas. Ele não sorteia outro piloto e não exige carregar o corpus:
+Em Windows, o atalho abaixo abre a interface local e **retoma** a folha com
+mais respostas já salvas. Ele não sorteia outro piloto e não exige carregar o
+corpus. A página apresenta um texto por vez e as opções clicáveis da área:
 
 ```powershell
 python scripts/annotate_theme_local.py --pilot
@@ -199,8 +188,26 @@ pendente. Só aparecem ID, área e texto, sem tema original, sugestão do modelo
 ou papel da amostra. Para acesso manual à URL, use `--no-browser`; para outra
 porta, use `--port 8766`. Encerre o servidor com Ctrl+C.
 
-Preencha `theme_human` do piloto e refine o manual de anotação. O piloto não
-entra na amostra principal. Se o mapa de temas mudar, confirme-o antes do treino.
+Os dois anotadores classificam os mesmos 120 textos. Para gerar a folha cega
+do segundo humano a partir da folha existente, sem copiar as respostas e sem
+sobrescrever um arquivo já criado:
+
+```powershell
+python scripts/prepare_second_theme_sheet.py --pilot
+```
+
+O segundo anotador recebe apenas o `second_annotation.csv` produzido, por
+canal privado. Ele pode fazer `git pull --ff-only` no próprio computador e
+abrir a folha com Python 3.10 ou superior, sem dataset nem PyTorch:
+
+```powershell
+python scripts/annotate_theme_local.py --sheet "C:\caminho\second_annotation.csv"
+```
+
+Não coloque planilhas com textos humanos no Git público. As respostas ficam
+salvas em cada CSV. A pessoa devolve o arquivo preenchido pelo mesmo canal.
+Ao final, transfira ambas as folhas preenchidas para o cluster e preserve o
+`pilot_annotation.csv` e seu `run.json` originais para conferir IDs e hashes.
 
 Uma checagem opcional de aderência temática dos sintéticos sorteia até dois
 textos por área × gerador. Em `synthetic_theme_review.csv`, preencha
@@ -216,55 +223,30 @@ $baselineRun = horus-theme --config $cfg baseline
 $modelRun = horus-theme --config $cfg train
 $baselinePredictions = horus-theme --config $cfg baseline-predict --baseline-run $baselineRun
 $predictions = horus-theme --config $cfg predict --model-run $modelRun
-$manifest = horus-theme --config $cfg sample --predictions $predictions --pilot $pilot
-$reviewDir = Split-Path $manifest -Parent
 ```
 
-Distribua `primary_annotation.csv` e, se houver segunda pessoa,
-`second_annotation.csv`, sem enviar `sample_manifest.csv`. Os dois anotadores
-devem preencher apenas `theme_human` e `annotation_note`, mantendo os IDs e as
-linhas. `incerto` significa que o texto não permite escolher com segurança;
-`fora_taxonomia` significa que nenhum tema da área é adequado. O segundo
-arquivo contém 120 textos que também constam do primeiro, 20 por área. Se houver
-divergências, a etapa de avaliação grava `annotator_disagreements.csv`;
-uma nova execução pode receber um CSV de adjudicação contendo apenas essas
-linhas, com as colunas `record_id`, `broad_area` e `theme_human`.
+No cluster, `scripts/slurm_theme_train_predict.sh` executa apenas `train` e
+`predict`; não gera uma nova amostra. Depois que as duas folhas de 120 linhas
+estiverem completas e transferidas, rode `evaluate-fixed` com o piloto original
+do cluster e os dois CSVs anotados. O comando grava concordância bruta, κ com
+correção de acaso dentro de cada área, intervalo bootstrap estratificado por
+área, precisão/cobertura observadas e o `threshold.json` fixo. O TF-IDF é
+opcional e entra apenas como referência diagnóstica.
 
-Também é possível preencher as planilhas principais na interface, em sessões
-separadas para preservar a independência dos anotadores:
+Se `theme_cluster.yaml` foi criado antes desta mudança, atualize nele
+`sampling.protocol: fixed_120` e `threshold.policy: fixed` com
+`threshold.fixed_probability: 0.95`, preservando o SHA já fixado em
+`model.revision`. O job Slurm verifica esses valores antes do treino.
 
 ```powershell
-horus-theme --config $cfg annotate-web --sheet (Join-Path $reviewDir 'primary_annotation.csv')
-horus-theme --config $cfg annotate-web --sheet (Join-Path $reviewDir 'second_annotation.csv')
+$pilot = 'results/theme_validation/<rodada-pilot>/pilot_annotation.csv'
+$threshold = horus-theme --config $cfg evaluate-fixed --predictions $predictions --pilot $pilot --primary 'caminho/primary_annotation.csv' --second 'caminho/second_annotation.csv' --baseline-predictions $baselinePredictions
 ```
 
-O outro anotador pode baixar o repositório e receber **somente** o arquivo
-`second_annotation.csv` por um canal privado. Não é necessário transferir o
-dataset completo, instalar PyTorch nem receber `sample_manifest.csv`. Em seu
-próprio computador, com Python 3.10 ou superior:
-
-```powershell
-git pull --ff-only
-python scripts/annotate_theme_local.py --sheet "C:\caminho\second_annotation.csv"
-```
-
-O script abre `http://127.0.0.1:8765/` localmente e salva cada resposta no
-próprio CSV; interromper e executar o mesmo comando novamente retoma no
-primeiro texto pendente. O anotador devolve o CSV preenchido por canal privado.
-Não coloque planilhas com textos humanos no Git público. O `sample` gera a
-folha do segundo anotador automaticamente; não sorteie outra amostra para ele.
-Antes do `sample` no cluster, sincronize `second_annotator_per_area: 20` no
-`theme_cluster.yaml` local do cluster.
-
-Sem segundo anotador:
-
-```powershell
-$threshold = horus-theme --config $cfg evaluate --predictions $predictions --baseline-predictions $baselinePredictions --sample-manifest $manifest --primary (Join-Path $reviewDir 'primary_annotation.csv')
-```
-
-Com segundo anotador, acrescente `--second (Join-Path $reviewDir
-'second_annotation.csv')`. Após adjudicar as divergências, rode novamente com
-`--adjudicated caminho_do_csv`; use o **último** `threshold.json` produzido.
+O limiar de 0,95 é definido na configuração **antes** de ler as respostas.
+Nenhum resultado nesta amostra autoriza anunciar precisão mínima de 90% no
+corpus. Compare também a concordância do modelo com cada anotador e relate os
+casos de `incerto` e `fora_taxonomia`.
 
 ```powershell
 $derivedCorpus = horus-theme --config $cfg materialize --predictions $predictions --threshold $threshold
@@ -281,20 +263,24 @@ metadados de proveniência.
 
 ## Interpretação e limites
 
-- A matriz de confusão e as linhas de avaliação usam a amostra humana
-  reservada (`confusion_evaluation.csv` e `human_evaluation_rows.csv`).
-  `evaluation_area_balanced` dá peso igual às seis áreas;
-  `evaluation_corpus_weighted` usa o inverso da probabilidade de amostragem
-  por área e fonte.
-  O relatório compara também as previsões sem abstenção do BERTimbau e do
-  TF-IDF na mesma metade humana reservada; essa comparação é diagnóstica.
-  A amostra diagnóstica e o piloto ficam fora dessas métricas.
-- Cohen's κ mede a concordância **entre humanos** nos 120 textos em comum.
-  O relatório inclui intervalo bootstrap estratificado por área. Sem segunda
-  pessoa, ele não é calculado. O κ global não valida cada tema;
-  categorias raras podem nem aparecer na amostra.
-- O mapeamento explícito e o classificador são avaliados juntos no conjunto
-  independente, mas o limiar é escolhido só sobre previsões do modelo.
+- `human_evaluation_rows.csv` contém as 120 comparações, sem o texto integral.
+  A amostra é balanceada por área, não por fonte. As métricas globais resumem
+  a média das seis áreas por construção, não uma estimativa direta ponderada
+  pela frequência das áreas no corpus.
+- Cohen's κ usa correção de acaso **dentro de cada área conhecida**, pois os
+  anotadores só escolhem entre temas daquela área. O relatório também inclui
+  o κ global convencional para comparação, embora a área compartilhada eleve
+  o acordo ao acaso nesse cálculo. Há acordo bruto e intervalo bootstrap
+  estratificado por área. Com 20 textos por área
+  e 94 temas possíveis no total, resultados por área e tema são instáveis.
+- Os 120 textos avaliam a transferência sintético → humano e a consistência
+  das anotações de forma exploratória. Eles não calibram o limiar. O valor
+  fixo de 0,95 é uma regra operacional, não uma probabilidade calibrada nem
+  garantia de precisão. Se apenas poucos textos forem aceitos, o intervalo
+  de precisão será amplo.
+- O mapeamento manual e o classificador são avaliados separadamente e juntos.
+  O primeiro anotador é a referência principal; a comparação com o segundo e
+  com o subconjunto de concordância é diagnóstica, sem adjudicação automática.
 - Uma taxa alta de `incerto` limita o uso das tabelas para afirmar equilíbrio
   temático. Temas previstos não devem ser usados para escolher o benchmark
   depois de conhecer os resultados dos detectores sem registrar essa decisão.

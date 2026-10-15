@@ -13,7 +13,7 @@ import pytest
 from horus_benchmark.audit.theme_common import ThemeContext, normalized_key, sha256_file
 from horus_benchmark.audit.theme_annotation_ui import AnnotationSheet, _page
 from horus_benchmark.audit.theme_workflow import (
-    _assigned, choose_threshold, export_review_sample, materialize_themes,
+    _area_stratified_kappa, _assigned, choose_threshold, export_review_sample, materialize_themes,
     proportional_allocation,
 )
 from horus_benchmark.data import DatasetCatalog
@@ -96,6 +96,16 @@ def test_source_strata_allocation_preserves_sample_size() -> None:
     assert rare.to_dict() == {"a": 1, "b": 1, "c": 8}
 
 
+def test_area_stratified_kappa_uses_within_area_chance() -> None:
+    paired = pd.DataFrame([
+        {"broad_area": "academic", "theme_human_primary": "A", "theme_human_second": "A"},
+        {"broad_area": "academic", "theme_human_primary": "B", "theme_human_second": "B"},
+        {"broad_area": "social", "theme_human_primary": "C", "theme_human_second": "D"},
+        {"broad_area": "social", "theme_human_primary": "D", "theme_human_second": "D"},
+    ])
+    assert _area_stratified_kappa(paired) == pytest.approx(0.5)
+
+
 def test_review_sample_has_disjoint_roles_and_excludes_pilot(
     tmp_path: Path, monkeypatch,
 ) -> None:
@@ -165,6 +175,9 @@ def test_review_sample_has_disjoint_roles_and_excludes_pilot(
     assert random_sample.groupby("broad_area").size().to_dict() == {
         area: 100 for area in areas
     }
+    context.config["sampling"]["protocol"] = "fixed_120"
+    with pytest.raises(ValueError, match="piloto como amostra final"):
+        export_review_sample(context, prediction_file, pilot)
 
 
 def test_materialization_preserves_source_and_all_record_ids(tmp_path: Path) -> None:

@@ -35,6 +35,14 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--second", type=Path)
     evaluate.add_argument("--adjudicated", type=Path)
     evaluate.add_argument("--baseline-predictions", type=Path)
+    fixed = commands.add_parser(
+        "evaluate-fixed", help="Evaluate the same 120 texts with two human annotators"
+    )
+    fixed.add_argument("--predictions", type=Path, required=True)
+    fixed.add_argument("--pilot", type=Path, required=True)
+    fixed.add_argument("--primary", type=Path, required=True)
+    fixed.add_argument("--second", type=Path, required=True)
+    fixed.add_argument("--baseline-predictions", type=Path)
     materialize = commands.add_parser("materialize", help="Create derived corpus and theme tables")
     materialize.add_argument("--predictions", type=Path, required=True)
     materialize.add_argument("--threshold", type=Path, required=True)
@@ -82,6 +90,13 @@ def main(argv: list[str] | None = None) -> int:
         from horus_benchmark.audit.theme_workflow import export_review_sample
 
         output = export_review_sample(context, args.predictions, args.pilot)
+    elif args.command == "evaluate-fixed":
+        from horus_benchmark.audit.theme_workflow import evaluate_fixed_pilot
+
+        output = evaluate_fixed_pilot(
+            context, args.predictions, args.pilot, args.primary, args.second,
+            args.baseline_predictions,
+        )
     elif args.command == "evaluate":
         from horus_benchmark.audit.theme_workflow import evaluate_annotations
 

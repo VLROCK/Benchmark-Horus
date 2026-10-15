@@ -23,9 +23,7 @@ export TOKENIZERS_PARALLELISM=false
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
 
 config="${HORUS_THEME_CONFIG:-experiments/01_quality_audit/human_theme_validation/configs/theme_cluster.yaml}"
-pilot_file="${HORUS_PILOT_PATH_FILE:-results/logs/theme_pilot.path}"
 test -f "$config"
-test -s "$pilot_file"
 
 for split in all train validation test; do
     test -s "dataset_final_completo/data/${split}.parquet"
@@ -46,6 +44,10 @@ if sys.version_info < (3, 10):
 if not Version("4.45") <= Version(transformers.__version__) < Version("5"):
     raise SystemExit("Transformers precisa estar no intervalo >=4.45,<5")
 cfg = yaml.safe_load(open(sys.argv[1], encoding="utf-8"))
+if cfg.get("sampling", {}).get("protocol") != "fixed_120":
+    raise SystemExit("A configuracao precisa usar sampling.protocol: fixed_120")
+if cfg.get("threshold", {}).get("policy") != "fixed" or float(cfg["threshold"].get("fixed_probability", 0)) != 0.95:
+    raise SystemExit("A configuracao precisa fixar threshold.fixed_probability: 0.95")
 name = cfg["model"]["name"]
 revision = cfg["model"]["revision"]
 if not re.fullmatch(r"[0-9a-f]{40}", revision):
@@ -59,10 +61,7 @@ print(f"Runtime: Python {sys.version.split()[0]}, PyTorch {torch.__version__}, T
 print(f"Modelo: {name}@{revision}", flush=True)
 PY
 
-pilot="$(cat "$pilot_file")"
-test -s "$pilot"
 printf 'Git: %s\n' "$(git rev-parse HEAD)"
-printf 'Piloto: %s\n' "$pilot"
 
 model_run="$("$python_bin" -m horus_benchmark.audit.theme_cli --config "$config" train)"
 printf '%s\n' "$model_run" > "results/logs/theme-${SLURM_JOB_ID}.model_run.path"
@@ -70,7 +69,4 @@ printf '%s\n' "$model_run" > "results/logs/theme-${SLURM_JOB_ID}.model_run.path"
 predictions="$("$python_bin" -m horus_benchmark.audit.theme_cli --config "$config" predict --model-run "$model_run")"
 printf '%s\n' "$predictions" > "results/logs/theme-${SLURM_JOB_ID}.predictions.path"
 
-manifest="$("$python_bin" -m horus_benchmark.audit.theme_cli --config "$config" sample --predictions "$predictions" --pilot "$pilot")"
-printf '%s\n' "$manifest" > "results/logs/theme-${SLURM_JOB_ID}.sample_manifest.path"
-
-printf 'Modelo: %s\nPrevisoes: %s\nAmostra: %s\n' "$model_run" "$predictions" "$manifest"
+printf 'Modelo: %s\nPrevisoes: %s\n' "$model_run" "$predictions"

@@ -13,9 +13,7 @@ batch_size: 256
 materialize_batch_size: 8192
 sampling:
   pilot_per_area: 20
-  random_per_area: 100
-  second_annotator_per_area: 20
-  diagnostic_total: 200
+  protocol: fixed_120
   synthetic_review_per_area_generator: 2
 baseline:
   max_features: 100000
@@ -34,6 +32,6 @@ model:
   patience: 1
   device: auto
 threshold:
-  target_precision: 0.90
-  min_accepted_calibration: 30
+  policy: fixed
+  fixed_probability: 0.95
   wilson_confidence: 0.95
