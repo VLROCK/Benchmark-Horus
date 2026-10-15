@@ -120,7 +120,7 @@ def test_review_sample_has_disjoint_roles_and_excludes_pilot(
         config={
             "experiment_id": "toy-sample", "seed": 7, "corpus_resource": "corpus",
             "sampling": {"pilot_per_area": 1, "random_per_area": 100,
-                         "second_annotator_per_area": 50,
+                         "second_annotator_per_area": 20,
                          "diagnostic_total": 200},
         },
         catalog=DatasetCatalog.from_yaml(catalog_path),
@@ -157,7 +157,10 @@ def test_review_sample_has_disjoint_roles_and_excludes_pilot(
     assert manifest["sample_role"].value_counts().to_dict() == {
         "calibration": 300, "evaluation": 300, "diagnostic": 200,
     }
-    assert int(manifest["second_annotator"].sum()) == 300
+    assert int(manifest["second_annotator"].sum()) == 120
+    assert manifest.loc[manifest["second_annotator"]].groupby("broad_area").size().to_dict() == {
+        area: 20 for area in areas
+    }
     random_sample = manifest.loc[manifest["sample_role"] != "diagnostic"]
     assert random_sample.groupby("broad_area").size().to_dict() == {
         area: 100 for area in areas

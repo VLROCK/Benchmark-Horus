@@ -52,8 +52,10 @@ do classificador como verdade fundamental.
    configuração. O piloto é excluído. Metade é fixada como
    calibração e metade como avaliação. Outros 200 casos diagnósticos priorizam
    baixa confiança e temas previstos raros; não entram na estimativa de
-   distribuição do corpus. O segundo anotador, se disponível, recebe 50 dos
-   100 textos aleatórios por área (300 em comum).
+   distribuição do corpus. O segundo anotador, se disponível, recebe 20 dos
+   100 textos aleatórios por área (120 em comum), divididos entre calibração
+   e avaliação. Essa cota permite estimar a concordância global, com incerteza
+   relevante; resultados por área e por tema são apenas diagnósticos.
 6. Os anotadores recebem somente `record_id`, área e texto, além de campos
    vazios para resposta e observação. Não recebem tema bruto, sugestão do
    modelo, confiança nem o papel amostral. Devem escolher um único tema
@@ -180,6 +182,17 @@ clicáveis da área correspondente:
 horus-theme --config $cfg annotate-web --sheet $pilot
 ```
 
+Em Windows, o atalho abaixo **retoma** o piloto local com mais respostas já
+salvas. Ele não sorteia outro piloto e não exige carregar o corpus:
+
+```powershell
+python scripts/annotate_theme_local.py --pilot
+```
+
+Se houver mais de um piloto, o caminho e o número de respostas da folha
+selecionada aparecem no terminal. Para escolher uma folha específica, use
+`--sheet "C:\caminho\pilot_annotation.csv"`.
+
 A página abre em `http://127.0.0.1:8765/`. Cada resposta é salva no próprio
 CSV com gravação atômica; ao reabrir, a interface retoma no primeiro texto
 pendente. Só aparecem ID, área e texto, sem tema original, sugestão do modelo
@@ -212,7 +225,7 @@ Distribua `primary_annotation.csv` e, se houver segunda pessoa,
 devem preencher apenas `theme_human` e `annotation_note`, mantendo os IDs e as
 linhas. `incerto` significa que o texto não permite escolher com segurança;
 `fora_taxonomia` significa que nenhum tema da área é adequado. O segundo
-arquivo contém os mesmos 300 textos já presentes no primeiro. Se houver
+arquivo contém 120 textos que também constam do primeiro, 20 por área. Se houver
 divergências, a etapa de avaliação grava `annotator_disagreements.csv`;
 uma nova execução pode receber um CSV de adjudicação contendo apenas essas
 linhas, com as colunas `record_id`, `broad_area` e `theme_human`.
@@ -224,6 +237,24 @@ separadas para preservar a independência dos anotadores:
 horus-theme --config $cfg annotate-web --sheet (Join-Path $reviewDir 'primary_annotation.csv')
 horus-theme --config $cfg annotate-web --sheet (Join-Path $reviewDir 'second_annotation.csv')
 ```
+
+O outro anotador pode baixar o repositório e receber **somente** o arquivo
+`second_annotation.csv` por um canal privado. Não é necessário transferir o
+dataset completo, instalar PyTorch nem receber `sample_manifest.csv`. Em seu
+próprio computador, com Python 3.10 ou superior:
+
+```powershell
+git pull --ff-only
+python scripts/annotate_theme_local.py --sheet "C:\caminho\second_annotation.csv"
+```
+
+O script abre `http://127.0.0.1:8765/` localmente e salva cada resposta no
+próprio CSV; interromper e executar o mesmo comando novamente retoma no
+primeiro texto pendente. O anotador devolve o CSV preenchido por canal privado.
+Não coloque planilhas com textos humanos no Git público. O `sample` gera a
+folha do segundo anotador automaticamente; não sorteie outra amostra para ele.
+Antes do `sample` no cluster, sincronize `second_annotator_per_area: 20` no
+`theme_cluster.yaml` local do cluster.
 
 Sem segundo anotador:
 
@@ -258,7 +289,7 @@ metadados de proveniência.
   O relatório compara também as previsões sem abstenção do BERTimbau e do
   TF-IDF na mesma metade humana reservada; essa comparação é diagnóstica.
   A amostra diagnóstica e o piloto ficam fora dessas métricas.
-- Cohen's κ mede a concordância **entre humanos** nos 300 textos em comum.
+- Cohen's κ mede a concordância **entre humanos** nos 120 textos em comum.
   O relatório inclui intervalo bootstrap estratificado por área. Sem segunda
   pessoa, ele não é calculado. O κ global não valida cada tema;
   categorias raras podem nem aparecer na amostra.

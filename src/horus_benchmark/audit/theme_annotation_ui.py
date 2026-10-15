@@ -11,9 +11,11 @@ import tempfile
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, urlsplit
 
-from horus_benchmark.audit.theme_common import ThemeContext
+if TYPE_CHECKING:
+    from horus_benchmark.audit.theme_common import ThemeContext
 
 
 REQUIRED_COLUMNS = ("record_id", "broad_area", "content", "theme_human", "annotation_note")
