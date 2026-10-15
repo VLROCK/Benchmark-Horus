@@ -97,8 +97,10 @@ As diretrizes científicas completas permanecem em `AGENTS.md`.
 
 ## Padronização temática dos textos humanos
 
-O protocolo de classificação de `theme` por seis modelos BERTimbau e revisão
-humana está em [experiments/01_quality_audit/human_theme_validation/README.md](experiments/01_quality_audit/human_theme_validation/README.md).
-Ele usa `dataset_final_completo` como corpus de entrada e produz somente
-artefatos derivados, sem alterar o snapshot original. Os comandos de execução
-estão documentados em ordem para o pesquisador rodar quando desejar.
+O protocolo atual de concordância de `theme` entre Gemma 4, GPT-OSS 120B e
+seis classificadores BERTimbau em 600 textos humanos está em
+[experiments/01_quality_audit/theme_agreement_600/README.md](experiments/01_quality_audit/theme_agreement_600/README.md).
+O protocolo anterior com revisão humana permanece documentado em
+[human_theme_validation/README.md](experiments/01_quality_audit/human_theme_validation/README.md)
+como referência histórica. Ambos usam `dataset_final_completo` e produzem
+artefatos derivados, sem alterar o snapshot original.
