@@ -13,11 +13,19 @@
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:?Submit from Benchmark-Horus root}"
 abaporu_home="${HORUS_ABAPORU_HOME:-/mnt/recod/homes/victor.roquetto}"
-requests="${HORUS_REQUESTS_PATH:?Prepare blind requests with the BERT/audit Python first}"
-test -s "$requests"
 python_bin="${HORUS_GEMMA_PYTHON:-$abaporu_home/venvs/horus_gemma4/bin/python}"
 test -x "$python_bin"
-output_dir="${HORUS_GEMMA_OUTPUT:-results/theme_llm_600/inference/gemma4_31b}"
+export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
+if [[ -n "${HORUS_FULL_INDEX:-}" ]]; then
+  resolved="$("$python_bin" -m horus_benchmark.audit.theme_llm_full_shard \
+    --index "$HORUS_FULL_INDEX" --shard-id "${SLURM_ARRAY_TASK_ID:?}" --model-key gemma4_31b)"
+  requests="${resolved%%$'\n'*}"
+  output_dir="${resolved#*$'\n'}"
+else
+  requests="${HORUS_REQUESTS_PATH:?Prepare blind requests first}"
+  output_dir="${HORUS_GEMMA_OUTPUT:-results/theme_llm_600/inference/gemma4_31b}"
+fi
+test -s "$requests"
 repo="${HORUS_HF_HUB:-$abaporu_home/.cache/huggingface/hub}/models--google--gemma-4-31B-it"
 revision="${HORUS_GEMMA_REVISION:-$(cat "$repo/refs/main")}"
 checkpoint="$repo/snapshots/$revision"
@@ -32,7 +40,6 @@ export TRITON_CACHE_DIR="${HORUS_TRITON_CACHE:-$abaporu_home/.cache/triton}"
 export HF_HOME="${HORUS_HF_HOME:-$abaporu_home/.cache/huggingface}"
 export HF_HUB_CACHE="${HORUS_HF_HUB:-$HF_HOME/hub}"
 export HF_HUB_OFFLINE=1
-export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
 export TOKENIZERS_PARALLELISM=false
 export VLLM_USE_FLASHINFER_SAMPLER=0
 unset MODEL_PATH PYTHON_BIN GDN_PREFILL_BACKEND VLLM_USE_DEEP_GEMM

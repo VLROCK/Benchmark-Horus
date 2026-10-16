@@ -84,9 +84,10 @@ def read_requests(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     task_kind = metadata.get("task_kind", "theme_first_pass")
     second = task_kind == "theme_second_pass" and metadata.get("schema_version") == 2
     first = task_kind == "theme_first_pass" and metadata.get("schema_version") == 1
-    if not (first or second) or not isinstance(metadata.get("rows"), int):
+    full = task_kind in {"theme_full_first", "theme_full_second"} and metadata.get("schema_version") == 3
+    if not (first or second or full) or not isinstance(metadata.get("rows"), int):
         raise ValueError("Prepared request metadata has an unexpected schema or row count")
-    if (first and metadata["rows"] != 600) or (second and not 1 <= metadata["rows"] <= 600):
+    if (first and metadata["rows"] != 600) or (second and not 1 <= metadata["rows"] <= 600) or (full and not 1 <= metadata["rows"] <= 2000):
         raise ValueError("Prepared request row count is invalid")
     if metadata.get("requests_sha256") != sha256_file(path):
         raise ValueError("Prepared requests differ from their recorded SHA-256")
@@ -97,16 +98,16 @@ def read_requests(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     areas = Counter(row["broad_area"] for row in rows)
     if first and (len(areas) != 6 or set(areas.values()) != {100}):
         raise ValueError("Prepared requests require 100 texts in each of six areas")
-    if second and (not set(areas).issubset({
+    if (second or full) and (not set(areas).issubset({
         "academic", "informational", "journalistic", "juridical", "literary", "social",
     }) or not areas):
-        raise ValueError("Second-pass requests have invalid areas")
+        raise ValueError("Prepared requests have invalid areas")
     for row in rows:
         if (not isinstance(row.get("prompt"), str) or not row["prompt"]
                 or not isinstance(row.get("allowed_themes"), list)
                 or not set(row["allowed_themes"]).issuperset({"incerto", "fora_taxonomia"})):
             raise ValueError(f"Malformed prepared request: {row.get('record_id')}")
-        if second and (not isinstance(row.get("candidate_labels"), list)
+        if (second or task_kind == "theme_full_second") and (not isinstance(row.get("candidate_labels"), list)
                        or not 1 <= len(row["candidate_labels"]) <= 2
                        or any(not isinstance(label, str) for label in row["candidate_labels"])
                        or len(set(row["candidate_labels"])) != len(row["candidate_labels"])
@@ -139,6 +140,33 @@ def _save_jsonl(path: Path, records: dict[str, dict[str, Any]], order: list[str]
     temp.replace(path)
 
 
+def _read_existing(path: Path, *, append_mode: bool) -> dict[str, dict[str, Any]]:
+    records: dict[str, dict[str, Any]] = {}
+    if not path.exists():
+        return records
+    if not append_mode:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                record = json.loads(line)
+                records[record["record_id"]] = record
+        return records
+    with path.open("r+b") as stream:
+        while True:
+            start = stream.tell()
+            line = stream.readline()
+            if not line:
+                break
+            try:
+                record = json.loads(line)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                if not line.endswith(b"\n") and not stream.readline():
+                    stream.truncate(start)
+                    break
+                raise ValueError(f"Corrupt nonterminal annotation line in {path}")
+            records[record["record_id"]] = record
+    return records
+
+
 def infer_local(
     requests_path: Path, model_key: str, checkpoint: Path,
     output_dir: Path, limit: int | None = None,
@@ -164,9 +192,6 @@ def infer_local(
             raise ValueError("--limit must be between 1 and the prepared row count")
         if limit_strategy not in {"first", "longest"}:
             raise ValueError("--limit-strategy must be first or longest")
-        counts: Counter[str] = Counter()
-        per_area = max(1, limit // 6)
-        chosen = []
         ordered = rows
         if limit_strategy == "longest":
             ordered = sorted(
@@ -176,11 +201,17 @@ def infer_local(
                     row["record_id"],
                 ),
             )
-        for row in ordered:
-            area = row["broad_area"]
-            if counts[area] < per_area and len(chosen) < limit:
-                chosen.append(row)
-                counts[area] += 1
+        if request_meta.get("task_kind", "").startswith("theme_full_"):
+            chosen = ordered[:limit]
+        else:
+            counts: Counter[str] = Counter()
+            per_area = max(1, limit // 6)
+            chosen = []
+            for row in ordered:
+                area = row["broad_area"]
+                if counts[area] < per_area and len(chosen) < limit:
+                    chosen.append(row)
+                    counts[area] += 1
         selected_ids = {row["record_id"] for row in chosen}
         rows_to_run = [row for row in rows if row["record_id"] in selected_ids]
     else:
@@ -202,10 +233,13 @@ def infer_local(
     }
     if expected_tokenizer:
         identity["tokenizer_sha256"] = request_meta["tokenizer_sha256"]
-    if request_meta.get("task_kind") == "theme_second_pass":
-        identity["task_kind"] = "theme_second_pass"
-        identity["upstream_gemma_sha256"] = request_meta["upstream_gemma_sha256"]
-        identity["upstream_gpt_sha256"] = request_meta["upstream_gpt_sha256"]
+    if request_meta.get("task_kind") != "theme_first_pass":
+        identity["task_kind"] = request_meta["task_kind"]
+        if "upstream_gemma_sha256" in request_meta:
+            identity["upstream_gemma_sha256"] = request_meta["upstream_gemma_sha256"]
+            identity["upstream_gpt_sha256"] = request_meta["upstream_gpt_sha256"]
+        if "upstream_index_sha256" in request_meta:
+            identity["upstream_index_sha256"] = request_meta["upstream_index_sha256"]
     if meta_path.exists():
         previous = json.loads(meta_path.read_text(encoding="utf-8"))
         if any(previous.get(key) != value for key, value in identity.items()):
@@ -216,12 +250,8 @@ def infer_local(
         meta_path.write_text(
             json.dumps(identity, ensure_ascii=False, indent=2) + "\n", encoding="utf-8",
         )
-    records: dict[str, dict[str, Any]] = {}
-    if output_path.exists():
-        for line in output_path.read_text(encoding="utf-8").splitlines():
-            if line.strip():
-                record = json.loads(line)
-                records[record["record_id"]] = record
+    append_mode = request_meta.get("task_kind", "").startswith("theme_full_")
+    records = _read_existing(output_path, append_mode=append_mode)
     all_order = [row["record_id"] for row in rows]
     candidates = [row for row in rows_to_run
                   if records.get(row["record_id"], {}).get("status") != "valid"]
@@ -275,7 +305,9 @@ def infer_local(
         for row, response in zip(batch, output):
             generated = response.outputs[0]
             raw = generated.text
-            second_pass = request_meta.get("task_kind") == "theme_second_pass"
+            second_pass = request_meta.get("task_kind") in {
+                "theme_second_pass", "theme_full_second",
+            }
             decision = (
                 parse_second_pass(raw, set(row["allowed_themes"]))
                 if second_pass else None
@@ -309,7 +341,14 @@ def infer_local(
                 "output_tokens": len(generated.token_ids),
                 "finish_reason": generated.finish_reason,
             }
-        _save_jsonl(output_path, records, all_order)
+        if append_mode:
+            with output_path.open("a", encoding="utf-8", newline="\n") as stream:
+                for record in batch:
+                    stream.write(json.dumps(records[record["record_id"]], ensure_ascii=False) + "\n")
+                stream.flush()
+                os.fsync(stream.fileno())
+        else:
+            _save_jsonl(output_path, records, all_order)
         valid = sum(record["status"] == "valid" for record in records.values())
         print(f"{model_key}: {len(records)}/{len(rows)} responses, {valid} valid", file=sys.stderr, flush=True)
     return output_path

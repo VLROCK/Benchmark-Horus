@@ -67,8 +67,10 @@ def _targets(context: ThemeContext, rows: pd.DataFrame) -> tuple[pd.DataFrame, p
 def render_second_prompt(
     context: ThemeContext, template: dict[str, Any], area: str,
     content: str, candidate_labels: list[str],
+    first_prompts: dict[str, Any] | None = None,
 ) -> str:
-    _, first_prompts = prompt_config(context)
+    if first_prompts is None:
+        _, first_prompts = prompt_config(context)
     definition = first_prompts["areas"][area]
     themes = "\n".join(f"- {theme}" for theme in context.taxonomy[area])
     candidates = "\n".join(f"- {label}" for label in candidate_labels)
