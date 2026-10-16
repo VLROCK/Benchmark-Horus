@@ -36,21 +36,30 @@ Python 3.11 separado para BERT e auditoria. O ambiente do Gemma contém a
 stack de inferência validada no handoff; o do GPT-OSS é separado. Não atualize
 as stacks vLLM durante a campanha sem repetir os smokes.
 
-Na shell de login do Abaporu, instale somente o novo ambiente BERT. O PyTorch
-2.8 e o Transformers 4.57.6 reproduzem a combinação já verificada no cluster
-anterior; a compatibilidade CUDA no Abaporu ainda deve ser testada em uma H200.
+Na shell de login do Abaporu, crie um `venv` com `/usr/bin/python3.11`. O
+Miniconda existente em `/mnt/recod/homes/...` tem um executável `conda` cujo
+shebang ainda aponta para `/home/victor.roquetto/miniconda3/bin/python` e não
+funciona para criar este ambiente. `HOME` também resolve para `/home`, enquanto
+os checkpoints e a toolchain validados estão em `/mnt/recod/homes`. Por isso,
+fixe explicitamente o caminho do cache. O PyTorch 2.8 e o Transformers 4.57.6
+reproduzem a combinação já verificada no cluster anterior; a compatibilidade
+CUDA no Abaporu ainda deve ser testada em uma H200.
 
 ```bash
 cd /mnt/recod/homes/victor.roquetto/Benchmark-Horus
 git pull --ff-only
-export HORUS_BERT_ENV=/mnt/recod/homes/victor.roquetto/miniconda3/envs/horus_bert_theme
+export HORUS_ABAPORU_HOME=/mnt/recod/homes/victor.roquetto
+export HORUS_BERT_ENV="$HORUS_ABAPORU_HOME/venvs/horus_bert_theme"
 export HORUS_BERT_PYTHON="$HORUS_BERT_ENV/bin/python"
-/mnt/recod/homes/victor.roquetto/miniconda3/bin/conda create -y -p "$HORUS_BERT_ENV" python=3.11 pip
+/usr/bin/python3.11 -m venv "$HORUS_BERT_ENV"
+"$HORUS_BERT_PYTHON" --version
 "$HORUS_BERT_PYTHON" -m pip install 'torch==2.8.0' 'transformers==4.57.6' -e '.[theme]' pytest
 "$HORUS_BERT_PYTHON" -m pip check
 "$HORUS_BERT_PYTHON" -c 'import torch,transformers,pandas,pyarrow,sklearn,yaml,pytest; print(torch.__version__,torch.version.cuda,transformers.__version__)'
 mkdir -p results/logs
 export HORUS_AUDIT_PYTHON="$HORUS_BERT_PYTHON"
+export HF_HOME="$HORUS_ABAPORU_HOME/.cache/huggingface"
+export HF_HUB_CACHE="$HF_HOME/hub"
 export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
 "$HORUS_AUDIT_PYTHON" -m pytest -q tests/test_theme_llm_600.py
 ```
@@ -77,8 +86,8 @@ PY
 ```
 
 Se o login não tiver acesso ao Hugging Face, copie o cache dessa revisão do
-cluster anterior para `~/.cache/huggingface/hub` antes de submeter o BERT. Os
-três arquivos acima precisam estar disponíveis localmente.
+cluster anterior para `$HORUS_ABAPORU_HOME/.cache/huggingface/hub` antes de
+submeter o BERT. Os três arquivos acima precisam estar disponíveis localmente.
 
 Antes de submeter, confira **sem atualizar os ambientes validados** que os
 dois Pythons LLM conseguem importar `numpy`, `pandas`, `pyarrow` e `yaml`,

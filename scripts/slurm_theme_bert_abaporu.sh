@@ -12,10 +12,12 @@
 
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:?Submit from Benchmark-Horus root}"
-python_bin="${HORUS_BERT_PYTHON:?Set an absolute Abaporu Python path with torch, transformers, pandas, pyarrow and sklearn}"
+abaporu_home="${HORUS_ABAPORU_HOME:-/mnt/recod/homes/victor.roquetto}"
+python_bin="${HORUS_BERT_PYTHON:-$abaporu_home/venvs/horus_bert_theme/bin/python}"
 test -x "$python_bin"
 export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
-export HF_HOME="${HORUS_HF_HOME:-$HOME/.cache/huggingface}"
+export HF_HOME="${HORUS_HF_HOME:-$abaporu_home/.cache/huggingface}"
+export HF_HUB_CACHE="${HORUS_HF_HUB:-$HF_HOME/hub}"
 export HF_HUB_OFFLINE=1
 export TOKENIZERS_PARALLELISM=false
 config="${HORUS_LLM_CONFIG:-experiments/01_quality_audit/theme_agreement_600/configs/theme_llm_600.yaml}"
