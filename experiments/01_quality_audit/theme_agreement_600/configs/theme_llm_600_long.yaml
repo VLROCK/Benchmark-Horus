@@ -1,0 +1,60 @@
+schema_version: 1
+experiment_id: human-theme-llm-long-v1
+workspace_root: ../../../..
+dataset_config: configs/datasets/horus_full.yaml
+corpus_resource: corpus
+train_resource: train
+validation_resource: validation
+taxonomy_resource: taxonomy
+manual_mapping: experiments/01_quality_audit/human_theme_validation/configs/manual_theme_map.csv
+output_root: results/theme_llm_600_long
+seed: 2026
+batch_size: 256
+sampling:
+  pilot_per_area: 20
+  total_per_area: 100
+  method: pilot_plus_uniform_without_replacement
+model:
+  name: neuralmind/bert-base-portuguese-cased
+  revision: 94d69c95f98f7d5b2a8700c420230ae10def0baa
+  heldout_generator: null
+  max_length: 512
+  train_batch_size: 16
+  inference_batch_size: 32
+  epochs: 3
+  learning_rate: 0.00002
+  weight_decay: 0.01
+  patience: 1
+  device: auto
+threshold:
+  policy: fixed
+  fixed_probability: 0.95
+prompts: experiments/01_quality_audit/theme_agreement_600/configs/llm_prompts_v2.yaml
+llm:
+  input_policy: shared_token_budget
+  max_model_len: 65536
+  max_output_tokens: 1024
+  chat_template_reserve_tokens: 512
+  batch_size: 1
+  gpu_memory_utilization: 0.90
+  temperature: 0.0
+  models:
+    gemma4_31b:
+      hf_repo: google/gemma-4-31B-it
+      revision: 842da3794eaa0b77d5f08bae87a17459d91ff475
+      chat_template_kwargs:
+        enable_thinking: false
+      enforce_eager: true
+      limit_mm_per_prompt:
+        image: 0
+        audio: 0
+        video: 0
+    gpt_oss_120b:
+      hf_repo: openai/gpt-oss-120b
+      revision: b5c939de8f754692c1647ca79fbf85e8c1e70f8a
+      chat_template_kwargs:
+        reasoning_effort: low
+      enforce_eager: false
+analysis:
+  bootstrap_replicates: 1000
+  min_source_rows: 20

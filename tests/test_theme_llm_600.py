@@ -5,13 +5,15 @@ from __future__ import annotations
 import csv
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pandas as pd
 import pytest
 
-from horus_benchmark.audit.theme_common import ThemeContext, sha256_file
+from horus_benchmark.audit.theme_common import ThemeContext, load_context, sha256_file
 from horus_benchmark.audit.theme_llm_600 import (
-    create_sample, evaluate_agreement, pair_metrics, prepare_inference,
+    _consensus, _shared_prefix, create_sample, evaluate_agreement, evaluate_llm_context,
+    pair_metrics, prepare_inference, prepared_requests, prompt_config,
     read_llm_labels, render_prompt,
 )
 from horus_benchmark.audit.theme_llm_worker import parse_theme, read_requests
@@ -19,6 +21,16 @@ from horus_benchmark.data import DatasetCatalog
 
 
 AREAS = ("academic", "informational", "journalistic", "juridical", "literary", "social")
+
+
+def test_long_prompt_examples_match_taxonomy() -> None:
+    root = Path(__file__).resolve().parents[1]
+    config = root / "experiments/01_quality_audit/theme_agreement_600/configs/theme_llm_600_long.yaml"
+    context = load_context(config)
+    _, prompts = prompt_config(context)
+    assert prompts["version"] == 2
+    assert set(prompts["areas"]) == set(AREAS)
+    assert "verbete enciclopédico" in prompts["areas"]["informational"]["guidance"]
 
 
 def test_parser_accepts_only_exact_json_taxonomy_label() -> None:
@@ -44,6 +56,51 @@ def test_area_prompt_lists_every_theme_and_examples() -> None:
     assert "Texto de teste" in prompt
 
 
+def test_shared_prefix_fits_both_tokenizers_with_one_prompt() -> None:
+    class FakeTokenizer:
+        def __init__(self, characters_per_token: int):
+            self.characters_per_token = characters_per_token
+
+        def encode(self, value: str, add_special_tokens: bool = False):
+            assert add_special_tokens is False
+            count = (len(value) + self.characters_per_token - 1) // self.characters_per_token
+            return SimpleNamespace(ids=[0] * count)
+
+    class Context:
+        taxonomy = {"academic": ("A",)}
+
+    prompts = {
+        "common": "Classifique.",
+        "areas": {"academic": {
+            "name": "Acadêmica", "guidance": "Tema central.", "examples": [],
+        }},
+    }
+    tokenizers = {"gemma4_31b": FakeTokenizer(1), "gpt_oss_120b": FakeTokenizer(2)}
+    full_text = "a" * 200
+    selected, counts = _shared_prefix(
+        Context(), prompts, "academic", full_text, tokenizers, 250,
+    )
+    assert 0 < len(selected) < len(full_text)
+    assert set(counts) == set(tokenizers)
+    assert max(counts.values()) <= 250
+    next_prompt = render_prompt(Context(), prompts, "academic", full_text[:len(selected) + 1])
+    assert len(tokenizers["gemma4_31b"].encode(next_prompt).ids) > 250
+
+
+def test_consensus_keeps_named_and_outside_separate() -> None:
+    frame = pd.DataFrame({
+        "gemma": ["Biologia", "fora_taxonomia", "incerto", "Biologia", "Biologia"],
+        "gpt": ["Biologia", "fora_taxonomia", "incerto", "Química", "incerto"],
+    })
+    status, theme = _consensus(frame, "gemma", "gpt")
+    assert status.tolist() == [
+        "named", "outside", "uncertain", "uncertain", "uncertain",
+    ]
+    assert theme.tolist() == [
+        "Biologia", "fora_taxonomia", "incerto", "incerto", "incerto",
+    ]
+
+
 def test_kappa_is_conditional_on_known_area() -> None:
     frame = pd.DataFrame([
         {"broad_area": "academic", "left": "A", "right": "A"},
@@ -58,7 +115,9 @@ def test_kappa_is_conditional_on_known_area() -> None:
     assert pair_metrics(single, "left", "right")["kappa_global"] is None
 
 
-def test_sample_reuses_120_ids_and_never_exposes_raw_theme(tmp_path: Path) -> None:
+def test_sample_reuses_120_ids_and_never_exposes_raw_theme(
+    tmp_path: Path, monkeypatch,
+) -> None:
     corpus = tmp_path / "all.parquet"
     records = [
         {"record_id": f"{area}-{i:03}", "label_name": "human",
@@ -143,6 +202,42 @@ def test_sample_reuses_120_ids_and_never_exposes_raw_theme(tmp_path: Path) -> No
     assert len(labels) == 600
     assert set(labels["gemma4_31b"]) == {"A"}
 
+    class WordTokenizer:
+        def encode(self, value: str, add_special_tokens: bool = False):
+            assert add_special_tokens is False
+            return SimpleNamespace(ids=[0] * len(value.split()))
+
+    monkeypatch.setattr(
+        "horus_benchmark.audit.theme_llm_600._shared_tokenizers",
+        lambda _context: (
+            {"gemma4_31b": WordTokenizer(), "gpt_oss_120b": WordTokenizer()},
+            {"gemma4_31b": "tokenizer-a", "gpt_oss_120b": "tokenizer-b"},
+        ),
+    )
+    context.config["llm"] = {
+        "input_policy": "shared_token_budget",
+        "max_model_len": 256,
+        "max_output_tokens": 16,
+        "chat_template_reserve_tokens": 16,
+        "models": {
+            "gemma4_31b": {"revision": "a" * 40},
+            "gpt_oss_120b": {"revision": "b" * 40},
+        },
+    }
+    long_payload, long_metadata = prepared_requests(context, sample)
+    long_dir = tmp_path / "prepared_long"
+    long_dir.mkdir()
+    long_path = long_dir / "requests.jsonl"
+    long_path.write_bytes(long_payload)
+    (long_dir / "requests_metadata.json").write_text(
+        json.dumps(long_metadata), encoding="utf-8",
+    )
+    long_rows, checked_meta = read_requests(long_path)
+    assert len(long_rows) == 600
+    assert checked_meta["truncated_rows"] == 0
+    assert all(set(row["input_tokens_by_model"]) == {"gemma4_31b", "gpt_oss_120b"}
+               for row in long_rows)
+
     requests.write_bytes(requests.read_bytes() + b"\n")
     with pytest.raises(ValueError, match="SHA-256"):
         read_requests(requests)
@@ -217,3 +312,29 @@ def test_evaluation_uses_same_600_ids_and_reports_agreement_only(
     threshold = json.loads((report_file.parent / "fixed_bert_threshold.json").read_text(encoding="utf-8"))
     assert threshold["threshold"] == 0.95
     assert (report_file.parent / "agreement_rows.csv").is_file()
+
+    (tmp_path / "metadata.json").write_text(
+        json.dumps({"prompts_sha256": "same-prompts"}), encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "horus_benchmark.audit.theme_llm_600.prepared_requests",
+        lambda _context, _path: (b"prompts", {
+            "requests_sha256": "shared",
+            "input_policy": "shared_token_budget",
+            "prompt_token_limit": 64000,
+            "truncated_rows": 0,
+            "truncated_by_area": {},
+            "max_input_tokens_by_model": {"gemma4_31b": 100, "gpt_oss_120b": 110},
+            "tokenizer_sha256": {"gemma4_31b": "a", "gpt_oss_120b": "b"},
+            "model_revisions": {"gemma4_31b": "a", "gpt_oss_120b": "b"},
+        }),
+    )
+    comparison_file = evaluate_llm_context(
+        context, context, sample, gemma_file, gpt_file, gemma_file, gpt_file,
+    )
+    comparison = json.loads(comparison_file.read_text(encoding="utf-8"))
+    assert comparison["sample_rows"] == 600
+    assert comparison["overall"]["named"] == 600
+    assert comparison["overall"]["outside"] == 0
+    assert comparison["overall"]["uncertain"] == 0
+    assert (comparison_file.parent / "coverage_by_factor.csv").is_file()

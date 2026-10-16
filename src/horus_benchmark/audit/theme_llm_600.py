@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import hashlib
+import os
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -26,11 +28,11 @@ def prompt_config(context: ThemeContext) -> tuple[Path, dict[str, Any]]:
     root = context.catalog.workspace_root
     path = (root / context.config["prompts"]).resolve()
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if data.get("version") != 1 or set(data.get("areas", {})) != set(context.taxonomy):
+    if data.get("version") not in (1, 2) or set(data.get("areas", {})) != set(context.taxonomy):
         raise ValueError("Prompt areas/version differ from the current taxonomy")
     for area, definition in data["areas"].items():
         for example in definition.get("examples", []):
-            if example["theme"] not in context.taxonomy[area]:
+            if example["theme"] not in context.taxonomy[area] and example["theme"] not in SPECIAL:
                 raise ValueError(f"Example outside taxonomy: {area} / {example['theme']}")
     return path, data
 
@@ -148,25 +150,112 @@ def checked_manifest(context: ThemeContext, path: Path) -> pd.DataFrame:
     return frame
 
 
+def _shared_tokenizers(context: ThemeContext) -> tuple[dict[str, Any], dict[str, str]]:
+    """Load the two pinned tokenizer.json files without loading either LLM."""
+    from tokenizers import Tokenizer
+
+    hub = Path(os.environ.get("HORUS_HF_HUB") or os.environ.get("HF_HUB_CACHE")
+               or Path.home() / ".cache" / "huggingface" / "hub")
+    tokenizers: dict[str, Any] = {}
+    fingerprints: dict[str, str] = {}
+    for key in MODEL_KEYS:
+        model = context.config["llm"]["models"][key]
+        revision = model.get("revision")
+        if not isinstance(revision, str) or len(revision) != 40:
+            raise ValueError(f"{key} requires a pinned 40-character revision")
+        repository = "models--" + model["hf_repo"].replace("/", "--")
+        snapshot = hub / repository / "snapshots" / revision
+        path = snapshot / "tokenizer.json"
+        if not path.is_file():
+            raise FileNotFoundError(f"Missing pinned tokenizer: {path}")
+        config_path = snapshot / "config.json"
+        if not config_path.is_file():
+            raise FileNotFoundError(f"Missing pinned model config: {config_path}")
+        model_config = json.loads(config_path.read_text(encoding="utf-8"))
+        native_limit = model_config.get("text_config", model_config).get(
+            "max_position_embeddings"
+        )
+        if native_limit is not None and int(context.config["llm"]["max_model_len"]) > int(native_limit):
+            raise ValueError(f"Configured context exceeds {key} native limit: {native_limit}")
+        tokenizers[key] = Tokenizer.from_file(str(path))
+        fingerprints[key] = sha256_file(path)
+    return tokenizers, fingerprints
+
+
+def _shared_prefix(
+    context: ThemeContext, prompts: dict[str, Any], area: str, content: str,
+    tokenizers: dict[str, Any], token_limit: int,
+) -> tuple[str, dict[str, int]]:
+    """Longest common text prefix fitting both tokenizers' prompt budgets."""
+    def lengths(characters: int) -> dict[str, int]:
+        prompt = render_prompt(context, prompts, area, content[:characters])
+        return {
+            key: len(tokenizer.encode(prompt, add_special_tokens=False).ids)
+            for key, tokenizer in tokenizers.items()
+        }
+
+    whole = lengths(len(content))
+    if all(count <= token_limit for count in whole.values()):
+        return content, whole
+    if any(count > token_limit for count in lengths(0).values()):
+        raise ValueError(f"Prompt instructions alone exceed token budget: {area}")
+    low, high = 0, len(content)
+    while low < high:
+        middle = (low + high + 1) // 2
+        if all(count <= token_limit for count in lengths(middle).values()):
+            low = middle
+        else:
+            high = middle - 1
+    return content[:low], lengths(low)
+
+
 def prepared_requests(context: ThemeContext, manifest_path: Path) -> tuple[bytes, dict[str, Any]]:
     """Build deterministic, blind prompts in the audit environment."""
     manifest = checked_manifest(context, manifest_path)
     prompt_path, prompts = prompt_config(context)
-    max_chars = int(context.config["llm"]["max_input_characters"])
-    if max_chars < 1:
-        raise ValueError("max_input_characters must be positive")
+    llm = context.config["llm"]
+    policy = llm.get("input_policy", "character_prefix")
+    tokenizers: dict[str, Any] = {}
+    tokenizer_sha256: dict[str, str] = {}
+    if policy == "shared_token_budget":
+        tokenizers, tokenizer_sha256 = _shared_tokenizers(context)
+        token_limit = (int(llm["max_model_len"]) - int(llm["max_output_tokens"])
+                       - int(llm["chat_template_reserve_tokens"]))
+        if token_limit < 1:
+            raise ValueError("No input tokens remain after output and chat-template reserves")
+    elif policy == "character_prefix":
+        max_chars = int(llm["max_input_characters"])
+        if max_chars < 1:
+            raise ValueError("max_input_characters must be positive")
+    else:
+        raise ValueError(f"Unknown LLM input policy: {policy}")
     lines: list[str] = []
+    truncated_by_area: Counter[str] = Counter()
+    max_tokens_by_model: Counter[str] = Counter()
     for row in manifest.sort_values(["broad_area", "record_id"]).to_dict(orient="records"):
         content = row["content"]
         area = row["broad_area"]
+        if policy == "shared_token_budget":
+            selected, token_counts = _shared_prefix(
+                context, prompts, area, content, tokenizers, token_limit,
+            )
+            for key, count in token_counts.items():
+                max_tokens_by_model[key] = max(max_tokens_by_model[key], count)
+        else:
+            selected, token_counts = content[:max_chars], None
+        truncated = len(selected) < len(content)
+        if truncated:
+            truncated_by_area[area] += 1
         request = {
             "record_id": row["record_id"],
             "broad_area": area,
-            "prompt": render_prompt(context, prompts, area, content[:max_chars]),
+            "prompt": render_prompt(context, prompts, area, selected),
             "allowed_themes": sorted(set(context.taxonomy[area]) | SPECIAL),
-            "input_truncated": len(content) > max_chars,
-            "input_characters_used": min(len(content), max_chars),
+            "input_truncated": truncated,
+            "input_characters_used": len(selected),
         }
+        if token_counts is not None:
+            request["input_tokens_by_model"] = token_counts
         lines.append(json.dumps(request, ensure_ascii=False, sort_keys=True,
                                 separators=(",", ":")))
     payload = ("\n".join(lines) + "\n").encode("utf-8")
@@ -177,8 +266,20 @@ def prepared_requests(context: ThemeContext, manifest_path: Path) -> tuple[bytes
         "prompts_sha256": sha256_file(prompt_path),
         "taxonomy_sha256": sha256_file(context.taxonomy_path),
         "requests_sha256": hashlib.sha256(payload).hexdigest(),
-        "llm_config": context.config["llm"],
+        "llm_config": llm,
+        "input_policy": policy,
+        "truncated_rows": sum(truncated_by_area.values()),
+        "truncated_by_area": dict(truncated_by_area),
     }
+    if policy == "shared_token_budget":
+        metadata.update({
+            "tokenizer_sha256": tokenizer_sha256,
+            "model_revisions": {
+                key: llm["models"][key]["revision"] for key in MODEL_KEYS
+            },
+            "prompt_token_limit": token_limit,
+            "max_input_tokens_by_model": dict(max_tokens_by_model),
+        })
     return payload, metadata
 
 
@@ -225,6 +326,165 @@ def read_llm_labels(
     return frame.rename(columns={
         "theme": model_key,
         "input_truncated": f"{model_key}_input_truncated",
+    })
+
+
+def _consensus(frame: pd.DataFrame, left: str, right: str) -> tuple[pd.Series, pd.Series]:
+    same = frame[left] == frame[right]
+    named = same & ~frame[left].isin(SPECIAL)
+    outside = same & frame[left].eq("fora_taxonomia")
+    status = pd.Series(
+        np.select([named, outside], ["named", "outside"], default="uncertain"),
+        index=frame.index,
+    )
+    theme = pd.Series(
+        np.where(named, frame[left], np.where(outside, "fora_taxonomia", "incerto")),
+        index=frame.index,
+    )
+    return status, theme
+
+
+def evaluate_llm_context(
+    context: ThemeContext, baseline_context: ThemeContext, manifest_path: Path,
+    baseline_gemma_path: Path, baseline_gpt_path: Path,
+    gemma_path: Path, gpt_path: Path,
+) -> Path:
+    """Compare two LLM-only runs on the same 600 IDs and report consensus coverage."""
+    manifest = checked_manifest(context, manifest_path)
+    checked_manifest(baseline_context, manifest_path)
+    baseline_gemma = read_llm_labels(
+        baseline_context, baseline_gemma_path, manifest_path, "gemma4_31b",
+    ).rename(columns={
+        "gemma4_31b": "baseline_gemma4_31b",
+        "gemma4_31b_input_truncated": "baseline_input_truncated",
+    })
+    baseline_gpt = read_llm_labels(
+        baseline_context, baseline_gpt_path, manifest_path, "gpt_oss_120b",
+    ).rename(columns={
+        "gpt_oss_120b": "baseline_gpt_oss_120b",
+        "gpt_oss_120b_input_truncated": "baseline_gpt_input_truncated",
+    })
+    gemma = read_llm_labels(context, gemma_path, manifest_path, "gemma4_31b")
+    gpt = read_llm_labels(context, gpt_path, manifest_path, "gpt_oss_120b")
+    rows = manifest.drop(columns="content").merge(
+        baseline_gemma, on=["record_id", "broad_area"], validate="one_to_one",
+    ).merge(
+        baseline_gpt, on=["record_id", "broad_area"], validate="one_to_one",
+    ).merge(
+        gemma, on=["record_id", "broad_area"], validate="one_to_one",
+    ).merge(
+        gpt, on=["record_id", "broad_area"], validate="one_to_one",
+    ).reset_index(drop=True)
+    if len(rows) != 600:
+        raise ValueError("Baseline and long-context LLM outputs do not share 600 IDs")
+    if (not rows["baseline_input_truncated"].equals(rows["baseline_gpt_input_truncated"])
+            or not rows["gemma4_31b_input_truncated"].equals(
+                rows["gpt_oss_120b_input_truncated"]
+            )):
+        raise ValueError("The two LLMs did not receive identically truncated inputs")
+    rows["baseline_consensus_status"], rows["baseline_consensus_theme"] = _consensus(
+        rows, "baseline_gemma4_31b", "baseline_gpt_oss_120b",
+    )
+    rows["consensus_status"], rows["consensus_theme"] = _consensus(
+        rows, "gemma4_31b", "gpt_oss_120b",
+    )
+    rows["gemma_changed"] = rows["baseline_gemma4_31b"] != rows["gemma4_31b"]
+    rows["gpt_changed"] = rows["baseline_gpt_oss_120b"] != rows["gpt_oss_120b"]
+
+    def coverage(group: pd.DataFrame) -> dict[str, Any]:
+        return {
+            "rows": len(group),
+            "named": int(group["consensus_status"].eq("named").sum()),
+            "outside": int(group["consensus_status"].eq("outside").sum()),
+            "uncertain": int(group["consensus_status"].eq("uncertain").sum()),
+            "baseline_truncated": int(group["baseline_input_truncated"].sum()),
+            "long_truncated": int(group["gemma4_31b_input_truncated"].sum()),
+            "gemma_label_changed": int(group["gemma_changed"].sum()),
+            "gpt_label_changed": int(group["gpt_changed"].sum()),
+            "pair": pair_metrics(group, "gemma4_31b", "gpt_oss_120b"),
+        }
+
+    rng = np.random.default_rng(int(context.config["seed"]) + 602)
+    strata = [group.index.to_numpy() for _, group in rows.groupby("broad_area")]
+    draws: list[float] = []
+    for _ in range(int(context.config["analysis"]["bootstrap_replicates"])):
+        indices = np.concatenate([
+            rng.choice(group, len(group), replace=True) for group in strata
+        ])
+        value = _conditional_kappa(
+            rows.iloc[indices], "gemma4_31b", "gpt_oss_120b",
+        )
+        if value is not None and np.isfinite(value):
+            draws.append(value)
+    overall = coverage(rows)
+    overall["pair"]["kappa_within_area_bootstrap_95"] = (
+        [float(value) for value in np.quantile(draws, [0.025, 0.975])]
+        if draws else None
+    )
+    by_area = {
+        area: coverage(group) for area, group in rows.groupby("broad_area")
+    }
+    minimum = int(context.config["analysis"]["min_source_rows"])
+    by_source = {
+        str(source): coverage(group)
+        for source, group in rows.groupby("source_name", dropna=False)
+        if len(group) >= minimum
+    }
+    baseline_prompt_hash = json.loads(
+        (baseline_gemma_path.parent / "metadata.json").read_text(encoding="utf-8")
+    )["prompts_sha256"]
+    new_prompt_hash = json.loads(
+        (gemma_path.parent / "metadata.json").read_text(encoding="utf-8")
+    )["prompts_sha256"]
+    _, request_meta = prepared_requests(context, manifest_path)
+    transitions = (
+        rows.groupby(["baseline_consensus_status", "consensus_status"])
+        .size().reset_index(name="rows").to_dict(orient="records")
+    )
+    run = context.new_run("llm-context-comparison", extra={
+        "sample_sha256": sha256_file(manifest_path),
+        "baseline_gemma_sha256": sha256_file(baseline_gemma_path),
+        "baseline_gpt_sha256": sha256_file(baseline_gpt_path),
+        "gemma_sha256": sha256_file(gemma_path),
+        "gpt_sha256": sha256_file(gpt_path),
+    })
+    rows.to_csv(run.directory / "comparison_rows.csv", index=False, encoding="utf-8-sig")
+    factors = [
+        {"factor": "area", "level": area, **{k: v for k, v in result.items() if k != "pair"},
+         "raw_agreement": result["pair"]["raw_agreement"],
+         "kappa_within_area": result["pair"]["kappa_within_area"]}
+        for area, result in by_area.items()
+    ] + [
+        {"factor": "source", "level": source, **{k: v for k, v in result.items() if k != "pair"},
+         "raw_agreement": result["pair"]["raw_agreement"],
+         "kappa_within_area": result["pair"]["kappa_within_area"]}
+        for source, result in by_source.items()
+    ]
+    pd.DataFrame.from_records(factors).to_csv(
+        run.directory / "coverage_by_factor.csv", index=False, encoding="utf-8-sig",
+    )
+    return run.write_result("comparison", {
+        "sample_rows": 600,
+        "human_reference": False,
+        "interpretation": "Agreement and coverage are not classification accuracy",
+        "shared_long_requests_sha256": request_meta["requests_sha256"],
+        "baseline_prompts_sha256": baseline_prompt_hash,
+        "long_prompts_sha256": new_prompt_hash,
+        "isolated_context_change": baseline_prompt_hash == new_prompt_hash,
+        "long_preparation": {
+            key: request_meta[key] for key in (
+                "input_policy", "prompt_token_limit", "truncated_rows",
+                "truncated_by_area", "max_input_tokens_by_model",
+                "tokenizer_sha256", "model_revisions",
+            )
+        },
+        "overall": overall,
+        "baseline_pair": pair_metrics(
+            rows, "baseline_gemma4_31b", "baseline_gpt_oss_120b",
+        ),
+        "by_area": by_area,
+        "by_source_exploratory": by_source,
+        "consensus_status_transitions": transitions,
     })
 
 

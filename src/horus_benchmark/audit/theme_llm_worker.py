@@ -62,6 +62,18 @@ def read_requests(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
                 or not isinstance(row.get("allowed_themes"), list)
                 or not set(row["allowed_themes"]).issuperset({"incerto", "fora_taxonomia"})):
             raise ValueError(f"Malformed prepared request: {row.get('record_id')}")
+    if metadata.get("input_policy") == "shared_token_budget":
+        limit = metadata.get("prompt_token_limit")
+        if not isinstance(limit, int) or limit < 1:
+            raise ValueError("Shared prompt token limit is missing")
+        if not isinstance(metadata.get("tokenizer_sha256"), dict):
+            raise ValueError("Shared tokenizer fingerprints are missing")
+        for row in rows:
+            counts = row.get("input_tokens_by_model")
+            if (not isinstance(counts, dict) or set(counts) != set(MODEL_KEYS)
+                    or any(not isinstance(value, int) or value > limit or value < 1
+                           for value in counts.values())):
+                raise ValueError(f"Prompt exceeds shared token budget: {row['record_id']}")
     return rows, metadata
 
 
@@ -79,6 +91,7 @@ def _save_jsonl(path: Path, records: dict[str, dict[str, Any]], order: list[str]
 def infer_local(
     requests_path: Path, model_key: str, checkpoint: Path,
     output_dir: Path, limit: int | None = None,
+    limit_strategy: str = "first",
 ) -> Path:
     rows, request_meta = read_requests(requests_path)
     if model_key not in MODEL_KEYS:
@@ -88,18 +101,37 @@ def infer_local(
     checkpoint = checkpoint.expanduser().resolve()
     if not (checkpoint / "config.json").is_file() or not re.fullmatch(r"[0-9a-f]{40}", checkpoint.name):
         raise ValueError("Use a complete local Hugging Face snapshot with a 40-character revision")
+    if model_cfg.get("revision") and checkpoint.name != model_cfg["revision"]:
+        raise ValueError(f"Checkpoint revision differs from prepared request: {model_key}")
+    expected_tokenizer = request_meta.get("tokenizer_sha256", {}).get(model_key)
+    if expected_tokenizer:
+        tokenizer_path = checkpoint / "tokenizer.json"
+        if not tokenizer_path.is_file() or sha256_file(tokenizer_path) != expected_tokenizer:
+            raise ValueError(f"Checkpoint tokenizer differs from prepared request: {model_key}")
     if limit is not None:
         if not 1 <= limit <= 600:
             raise ValueError("--limit must be between 1 and 600")
+        if limit_strategy not in {"first", "longest"}:
+            raise ValueError("--limit-strategy must be first or longest")
         counts: Counter[str] = Counter()
         per_area = max(1, limit // 6)
         chosen = []
-        for row in rows:
+        ordered = rows
+        if limit_strategy == "longest":
+            ordered = sorted(
+                rows,
+                key=lambda row: (
+                    -max(row.get("input_tokens_by_model", {}).values(), default=0),
+                    row["record_id"],
+                ),
+            )
+        for row in ordered:
             area = row["broad_area"]
             if counts[area] < per_area and len(chosen) < limit:
                 chosen.append(row)
                 counts[area] += 1
-        rows_to_run = chosen
+        selected_ids = {row["record_id"] for row in chosen}
+        rows_to_run = [row for row in rows if row["record_id"] in selected_ids]
     else:
         rows_to_run = rows
     output_dir = output_dir.expanduser().resolve()
@@ -117,6 +149,8 @@ def infer_local(
         "taxonomy_sha256": request_meta["taxonomy_sha256"],
         "llm_config": llm_cfg,
     }
+    if expected_tokenizer:
+        identity["tokenizer_sha256"] = request_meta["tokenizer_sha256"]
     if meta_path.exists():
         previous = json.loads(meta_path.read_text(encoding="utf-8"))
         if any(previous.get(key) != value for key, value in identity.items()):
@@ -187,6 +221,17 @@ def infer_local(
             generated = response.outputs[0]
             raw = generated.text
             theme = parse_theme(raw, set(row["allowed_themes"]))
+            actual_input_tokens = (
+                len(response.prompt_token_ids)
+                if response.prompt_token_ids is not None else None
+            )
+            if (actual_input_tokens is not None
+                    and actual_input_tokens + int(llm_cfg["max_output_tokens"])
+                    > int(llm_cfg["max_model_len"])):
+                raise RuntimeError(
+                    f"{model_key}: chat-template token count exceeds reserved context "
+                    f"for {row['record_id']}"
+                )
             records[row["record_id"]] = {
                 "record_id": row["record_id"],
                 "broad_area": row["broad_area"],
@@ -195,6 +240,8 @@ def infer_local(
                 "raw_output": raw,
                 "input_truncated": row["input_truncated"],
                 "input_characters_used": row["input_characters_used"],
+                "input_tokens_estimated": row.get("input_tokens_by_model", {}).get(model_key),
+                "input_tokens_actual": actual_input_tokens,
                 "output_tokens": len(generated.token_ids),
                 "finish_reason": generated.finish_reason,
             }
@@ -211,9 +258,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--limit", type=int)
+    parser.add_argument("--limit-strategy", choices=("first", "longest"), default="first")
     args = parser.parse_args(argv)
     result = infer_local(args.requests, args.model_key, args.checkpoint,
-                         args.output_dir, args.limit)
+                         args.output_dir, args.limit, args.limit_strategy)
     print(result)
     return 0
 

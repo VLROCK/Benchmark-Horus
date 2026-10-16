@@ -19,7 +19,7 @@ python_bin="${HORUS_GPTOSS_PYTHON:-$abaporu_home/miniconda3/envs/horus_gptoss/bi
 test -x "$python_bin"
 output_dir="${HORUS_GPTOSS_OUTPUT:-results/theme_llm_600/inference/gpt_oss_120b}"
 repo="${HORUS_HF_HUB:-$abaporu_home/.cache/huggingface/hub}/models--openai--gpt-oss-120b"
-revision="$(cat "$repo/refs/main")"
+revision="${HORUS_GPTOSS_REVISION:-$(cat "$repo/refs/main")}"
 checkpoint="$repo/snapshots/$revision"
 test -s "$checkpoint/config.json"
 toolchain="${HORUS_TRITON_TOOLCHAIN:-$abaporu_home/tools/triton-toolchain}"
@@ -39,5 +39,7 @@ unset VLLM_USE_FLASHINFER_SAMPLER LIMIT_MM_IMAGE LIMIT_MM_AUDIO LIMIT_MM_VIDEO
 nvidia-smi -L
 printf 'Git: %s\nGPT-OSS checkpoint: %s\n' "$(git rev-parse HEAD)" "$checkpoint"
 args=(--requests "$requests" --model-key gpt_oss_120b --checkpoint "$checkpoint" --output-dir "$output_dir")
-if [[ -n "${HORUS_SMOKE_LIMIT:-}" ]]; then args+=(--limit "$HORUS_SMOKE_LIMIT"); fi
+if [[ -n "${HORUS_SMOKE_LIMIT:-}" ]]; then
+  args+=(--limit "$HORUS_SMOKE_LIMIT" --limit-strategy "${HORUS_SMOKE_STRATEGY:-first}")
+fi
 "$python_bin" -m horus_benchmark.audit.theme_llm_worker "${args[@]}"

@@ -1,5 +1,9 @@
 # Concordância de `theme` em 600 textos humanos
 
+Para a segunda rodada com contexto longo e somente os dois LLMs, veja
+[`LONG_CONTEXT.md`](LONG_CONTEXT.md). Ela reutiliza os mesmos 600 IDs
+e preserva esta rodada como linha de base.
+
 Este protocolo usa o corpus imutável `dataset_final_completo`. Ele compara
 **Gemma 4 31B IT, GPT-OSS 120B e BERTimbau** nos mesmos 600 textos humanos:
 100 por `broad_area`. Reaproveita apenas os **IDs e textos** dos 120 casos do

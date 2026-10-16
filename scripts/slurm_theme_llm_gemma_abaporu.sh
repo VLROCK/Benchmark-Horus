@@ -19,7 +19,7 @@ python_bin="${HORUS_GEMMA_PYTHON:-$abaporu_home/venvs/horus_gemma4/bin/python}"
 test -x "$python_bin"
 output_dir="${HORUS_GEMMA_OUTPUT:-results/theme_llm_600/inference/gemma4_31b}"
 repo="${HORUS_HF_HUB:-$abaporu_home/.cache/huggingface/hub}/models--google--gemma-4-31B-it"
-revision="$(cat "$repo/refs/main")"
+revision="${HORUS_GEMMA_REVISION:-$(cat "$repo/refs/main")}"
 checkpoint="$repo/snapshots/$revision"
 test -s "$checkpoint/config.json"
 toolchain="${HORUS_TRITON_TOOLCHAIN:-$abaporu_home/tools/triton-toolchain}"
@@ -40,5 +40,7 @@ unset LIMIT_MM_IMAGE LIMIT_MM_AUDIO LIMIT_MM_VIDEO
 nvidia-smi -L
 printf 'Git: %s\nGemma checkpoint: %s\n' "$(git rev-parse HEAD)" "$checkpoint"
 args=(--requests "$requests" --model-key gemma4_31b --checkpoint "$checkpoint" --output-dir "$output_dir")
-if [[ -n "${HORUS_SMOKE_LIMIT:-}" ]]; then args+=(--limit "$HORUS_SMOKE_LIMIT"); fi
+if [[ -n "${HORUS_SMOKE_LIMIT:-}" ]]; then
+  args+=(--limit "$HORUS_SMOKE_LIMIT" --limit-strategy "${HORUS_SMOKE_STRATEGY:-first}")
+fi
 "$python_bin" -m horus_benchmark.audit.theme_llm_worker "${args[@]}"
