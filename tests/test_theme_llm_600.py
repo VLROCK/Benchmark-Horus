@@ -11,7 +11,8 @@ import pytest
 
 from horus_benchmark.audit.theme_common import ThemeContext, sha256_file
 from horus_benchmark.audit.theme_llm_600 import (
-    create_sample, evaluate_agreement, pair_metrics, prepare_inference, render_prompt,
+    create_sample, evaluate_agreement, pair_metrics, prepare_inference,
+    read_llm_labels, render_prompt,
 )
 from horus_benchmark.audit.theme_llm_worker import parse_theme, read_requests
 from horus_benchmark.data import DatasetCatalog
@@ -121,6 +122,27 @@ def test_sample_reuses_120_ids_and_never_exposes_raw_theme(tmp_path: Path) -> No
     assert len(prepared) == 600 and metadata["manifest_sha256"] == sha256_file(sample)
     assert all("private metadata" not in row["prompt"] for row in prepared)
     assert all("source_name" not in row and "theme_human" not in row for row in prepared)
+
+    model_dir = tmp_path / "gemma"
+    model_dir.mkdir()
+    model_metadata = metadata | {"model_key": "gemma4_31b"}
+    (model_dir / "metadata.json").write_text(
+        json.dumps(model_metadata), encoding="utf-8",
+    )
+    annotations = [
+        {"record_id": row["record_id"], "broad_area": row["broad_area"],
+         "theme": "A", "status": "valid", "input_truncated": False}
+        for row in prepared
+    ]
+    annotations_path = model_dir / "annotations.jsonl"
+    annotations_path.write_text(
+        "\n".join(json.dumps(row) for row in annotations) + "\n",
+        encoding="utf-8",
+    )
+    labels = read_llm_labels(context, annotations_path, sample, "gemma4_31b")
+    assert len(labels) == 600
+    assert set(labels["gemma4_31b"]) == {"A"}
+
     requests.write_bytes(requests.read_bytes() + b"\n")
     with pytest.raises(ValueError, match="SHA-256"):
         read_requests(requests)

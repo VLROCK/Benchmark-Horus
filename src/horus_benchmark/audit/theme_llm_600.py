@@ -219,7 +219,7 @@ def read_llm_labels(
         area = record["broad_area"]
         if record["theme"] not in context.taxonomy[area] and record["theme"] not in SPECIAL:
             raise ValueError(f"{model_key}: theme outside taxonomy: {record['record_id']}")
-    frame = pd.DataFrame.from_records(latest.values())[
+    frame = pd.DataFrame.from_records(list(latest.values()))[
         ["record_id", "broad_area", "theme", "input_truncated"]
     ]
     return frame.rename(columns={
