@@ -43,25 +43,76 @@ def parse_theme(response: str, allowed: set[str]) -> str | None:
     return last_theme if last_theme in allowed else None
 
 
+def parse_second_pass(response: str, allowed: set[str]) -> dict[str, Any] | None:
+    """Accept only a complete second-pass JSON decision with valid labels."""
+    response = re.split(r"<\|(?:im_sep|meta_sep)\|>final", response)[-1]
+    decoder = json.JSONDecoder()
+    decision = None
+    for match in re.finditer(r"\{", response):
+        try:
+            value, _ = decoder.raw_decode(response[match.start():])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(value, dict) and "theme" in value:
+            decision = value
+    if not isinstance(decision, dict) or set(decision) != {
+        "theme", "alternative_themes", "rationale",
+    }:
+        return None
+    theme = decision["theme"]
+    alternatives = decision["alternative_themes"]
+    rationale = decision["rationale"]
+    named = allowed - {"incerto", "fora_taxonomia"}
+    if (not isinstance(theme, str) or theme not in allowed
+            or not isinstance(alternatives, list) or len(alternatives) > 2
+            or len(set(map(str, alternatives))) != len(alternatives)
+            or any(not isinstance(item, str) or item not in named for item in alternatives)
+            or not isinstance(rationale, str) or not 1 <= len(rationale.strip()) <= 700):
+        return None
+    if theme in alternatives:
+        return None
+    return {
+        "theme": theme,
+        "alternative_themes": alternatives,
+        "rationale": rationale.strip(),
+    }
+
+
 def read_requests(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     path = path.expanduser().resolve()
     metadata = json.loads((path.parent / "requests_metadata.json").read_text(encoding="utf-8"))
-    if metadata.get("schema_version") != 1 or metadata.get("rows") != 600:
+    task_kind = metadata.get("task_kind", "theme_first_pass")
+    second = task_kind == "theme_second_pass" and metadata.get("schema_version") == 2
+    first = task_kind == "theme_first_pass" and metadata.get("schema_version") == 1
+    if not (first or second) or not isinstance(metadata.get("rows"), int):
         raise ValueError("Prepared request metadata has an unexpected schema or row count")
+    if (first and metadata["rows"] != 600) or (second and not 1 <= metadata["rows"] <= 600):
+        raise ValueError("Prepared request row count is invalid")
     if metadata.get("requests_sha256") != sha256_file(path):
         raise ValueError("Prepared requests differ from their recorded SHA-256")
     rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()
             if line.strip()]
-    if len(rows) != 600 or len({row["record_id"] for row in rows}) != 600:
-        raise ValueError("Prepared requests require 600 unique IDs")
+    if len(rows) != metadata["rows"] or len({row["record_id"] for row in rows}) != len(rows):
+        raise ValueError("Prepared requests have missing or duplicate IDs")
     areas = Counter(row["broad_area"] for row in rows)
-    if len(areas) != 6 or set(areas.values()) != {100}:
+    if first and (len(areas) != 6 or set(areas.values()) != {100}):
         raise ValueError("Prepared requests require 100 texts in each of six areas")
+    if second and (not set(areas).issubset({
+        "academic", "informational", "journalistic", "juridical", "literary", "social",
+    }) or not areas):
+        raise ValueError("Second-pass requests have invalid areas")
     for row in rows:
         if (not isinstance(row.get("prompt"), str) or not row["prompt"]
                 or not isinstance(row.get("allowed_themes"), list)
                 or not set(row["allowed_themes"]).issuperset({"incerto", "fora_taxonomia"})):
             raise ValueError(f"Malformed prepared request: {row.get('record_id')}")
+        if second and (not isinstance(row.get("candidate_labels"), list)
+                       or not 1 <= len(row["candidate_labels"]) <= 2
+                       or any(not isinstance(label, str) for label in row["candidate_labels"])
+                       or len(set(row["candidate_labels"])) != len(row["candidate_labels"])
+                       or any(label not in row["allowed_themes"]
+                              for label in row["candidate_labels"])):
+            raise ValueError(f"Invalid second-pass candidates: {row.get('record_id')}")
     if metadata.get("input_policy") == "shared_token_budget":
         limit = metadata.get("prompt_token_limit")
         if not isinstance(limit, int) or limit < 1:
@@ -109,8 +160,8 @@ def infer_local(
         if not tokenizer_path.is_file() or sha256_file(tokenizer_path) != expected_tokenizer:
             raise ValueError(f"Checkpoint tokenizer differs from prepared request: {model_key}")
     if limit is not None:
-        if not 1 <= limit <= 600:
-            raise ValueError("--limit must be between 1 and 600")
+        if not 1 <= limit <= len(rows):
+            raise ValueError("--limit must be between 1 and the prepared row count")
         if limit_strategy not in {"first", "longest"}:
             raise ValueError("--limit-strategy must be first or longest")
         counts: Counter[str] = Counter()
@@ -151,6 +202,10 @@ def infer_local(
     }
     if expected_tokenizer:
         identity["tokenizer_sha256"] = request_meta["tokenizer_sha256"]
+    if request_meta.get("task_kind") == "theme_second_pass":
+        identity["task_kind"] = "theme_second_pass"
+        identity["upstream_gemma_sha256"] = request_meta["upstream_gemma_sha256"]
+        identity["upstream_gpt_sha256"] = request_meta["upstream_gpt_sha256"]
     if meta_path.exists():
         previous = json.loads(meta_path.read_text(encoding="utf-8"))
         if any(previous.get(key) != value for key, value in identity.items()):
@@ -220,7 +275,14 @@ def infer_local(
         for row, response in zip(batch, output):
             generated = response.outputs[0]
             raw = generated.text
-            theme = parse_theme(raw, set(row["allowed_themes"]))
+            second_pass = request_meta.get("task_kind") == "theme_second_pass"
+            decision = (
+                parse_second_pass(raw, set(row["allowed_themes"]))
+                if second_pass else None
+            )
+            theme = decision["theme"] if second_pass and decision else (
+                None if second_pass else parse_theme(raw, set(row["allowed_themes"]))
+            )
             actual_input_tokens = (
                 len(response.prompt_token_ids)
                 if response.prompt_token_ids is not None else None
@@ -238,6 +300,8 @@ def infer_local(
                 "theme": theme,
                 "status": "valid" if theme is not None else "invalid",
                 "raw_output": raw,
+                "alternative_themes": decision["alternative_themes"] if decision else None,
+                "rationale": decision["rationale"] if decision else None,
                 "input_truncated": row["input_truncated"],
                 "input_characters_used": row["input_characters_used"],
                 "input_tokens_estimated": row.get("input_tokens_by_model", {}).get(model_key),
@@ -247,7 +311,7 @@ def infer_local(
             }
         _save_jsonl(output_path, records, all_order)
         valid = sum(record["status"] == "valid" for record in records.values())
-        print(f"{model_key}: {len(records)}/600 responses, {valid} valid", file=sys.stderr, flush=True)
+        print(f"{model_key}: {len(records)}/{len(rows)} responses, {valid} valid", file=sys.stderr, flush=True)
     return output_path
 
 
