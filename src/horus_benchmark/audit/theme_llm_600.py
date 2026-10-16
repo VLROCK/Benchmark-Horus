@@ -251,12 +251,19 @@ def pair_metrics(frame: pd.DataFrame, left: str, right: str) -> dict[str, Any]:
                 "kappa_within_area": None}
     first = frame["broad_area"].astype(str) + "::" + frame[left].astype(str)
     second = frame["broad_area"].astype(str) + "::" + frame[right].astype(str)
-    global_kappa = cohen_kappa_score(first, second)
+    # Cohen's kappa is undefined if both raters use only one identical label.
+    global_kappa = (
+        cohen_kappa_score(first, second)
+        if len(set(first) | set(second)) > 1 else None
+    )
     joint = frame.loc[~frame[left].isin(SPECIAL) & ~frame[right].isin(SPECIAL)]
     return {
         "rows": len(frame),
         "raw_agreement": float((frame[left] == frame[right]).mean()),
-        "kappa_global": float(global_kappa) if np.isfinite(global_kappa) else None,
+        "kappa_global": (
+            float(global_kappa)
+            if global_kappa is not None and np.isfinite(global_kappa) else None
+        ),
         "kappa_within_area": _conditional_kappa(frame, left, right),
         "left_special": int(frame[left].isin(SPECIAL).sum()),
         "right_special": int(frame[right].isin(SPECIAL).sum()),

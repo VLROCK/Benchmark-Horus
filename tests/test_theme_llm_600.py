@@ -53,6 +53,8 @@ def test_kappa_is_conditional_on_known_area() -> None:
     result = pair_metrics(frame, "left", "right")
     assert result["raw_agreement"] == pytest.approx(0.75)
     assert result["kappa_within_area"] == pytest.approx(0.5)
+    single = pd.DataFrame([{"broad_area": "academic", "left": "A", "right": "A"}])
+    assert pair_metrics(single, "left", "right")["kappa_global"] is None
 
 
 def test_sample_reuses_120_ids_and_never_exposes_raw_theme(tmp_path: Path) -> None:
@@ -88,7 +90,8 @@ def test_sample_reuses_120_ids_and_never_exposes_raw_theme(tmp_path: Path) -> No
         config={"experiment_id": "toy-llm", "seed": 7, "corpus_resource": "corpus",
                 "sampling": {"method": "pilot_plus_uniform_without_replacement",
                              "pilot_per_area": 20, "total_per_area": 100},
-                "prompts": "prompts.yaml"},
+                "prompts": "prompts.yaml",
+                "llm": {"max_input_characters": 6000, "models": {}}},
         catalog=DatasetCatalog.from_yaml(catalog_file),
         taxonomy={area: ("A",) for area in AREAS}, aliases={},
         taxonomy_path=taxonomy_file, mapping_path=mapping_file,
