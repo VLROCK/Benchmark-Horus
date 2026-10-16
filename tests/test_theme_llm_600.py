@@ -11,9 +11,9 @@ import pytest
 
 from horus_benchmark.audit.theme_common import ThemeContext, sha256_file
 from horus_benchmark.audit.theme_llm_600 import (
-    create_sample, evaluate_agreement, pair_metrics, render_prompt,
+    create_sample, evaluate_agreement, pair_metrics, prepare_inference, render_prompt,
 )
-from horus_benchmark.audit.theme_llm_inference import parse_theme
+from horus_benchmark.audit.theme_llm_worker import parse_theme, read_requests
 from horus_benchmark.data import DatasetCatalog
 
 
@@ -105,6 +105,7 @@ def test_sample_reuses_120_ids_and_never_exposes_raw_theme(tmp_path: Path) -> No
                                  "content": f"Texto {area} {i}", "theme_human": "A"})
 
     sample = create_sample(context, pilot)
+    requests = prepare_inference(context, sample)
 
     frame = pd.read_parquet(sample)
     assert len(frame) == 600
@@ -113,6 +114,13 @@ def test_sample_reuses_120_ids_and_never_exposes_raw_theme(tmp_path: Path) -> No
     assert (frame["sample_origin"] == "existing_pilot").sum() == 120
     assert "theme" not in frame and "theme_human" not in frame
     assert json.loads((sample.parent / "sample_summary.json").read_text(encoding="utf-8"))["human_labels_used"] is False
+    prepared, metadata = read_requests(requests)
+    assert len(prepared) == 600 and metadata["manifest_sha256"] == sha256_file(sample)
+    assert all("private metadata" not in row["prompt"] for row in prepared)
+    assert all("source_name" not in row and "theme_human" not in row for row in prepared)
+    requests.write_bytes(requests.read_bytes() + b"\n")
+    with pytest.raises(ValueError, match="SHA-256"):
+        read_requests(requests)
 
 
 def test_evaluation_uses_same_600_ids_and_reports_agreement_only(

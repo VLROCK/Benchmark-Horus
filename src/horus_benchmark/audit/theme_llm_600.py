@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from pathlib import Path
 from typing import Any
 
@@ -147,15 +148,64 @@ def checked_manifest(context: ThemeContext, path: Path) -> pd.DataFrame:
     return frame
 
 
+def prepared_requests(context: ThemeContext, manifest_path: Path) -> tuple[bytes, dict[str, Any]]:
+    """Build deterministic, blind prompts in the audit environment."""
+    manifest = checked_manifest(context, manifest_path)
+    prompt_path, prompts = prompt_config(context)
+    max_chars = int(context.config["llm"]["max_input_characters"])
+    if max_chars < 1:
+        raise ValueError("max_input_characters must be positive")
+    lines: list[str] = []
+    for row in manifest.sort_values(["broad_area", "record_id"]).to_dict(orient="records"):
+        content = row["content"]
+        area = row["broad_area"]
+        request = {
+            "record_id": row["record_id"],
+            "broad_area": area,
+            "prompt": render_prompt(context, prompts, area, content[:max_chars]),
+            "allowed_themes": sorted(set(context.taxonomy[area]) | SPECIAL),
+            "input_truncated": len(content) > max_chars,
+            "input_characters_used": min(len(content), max_chars),
+        }
+        lines.append(json.dumps(request, ensure_ascii=False, sort_keys=True,
+                                separators=(",", ":")))
+    payload = ("\n".join(lines) + "\n").encode("utf-8")
+    metadata = {
+        "schema_version": 1,
+        "rows": 600,
+        "manifest_sha256": sha256_file(manifest_path),
+        "prompts_sha256": sha256_file(prompt_path),
+        "taxonomy_sha256": sha256_file(context.taxonomy_path),
+        "requests_sha256": hashlib.sha256(payload).hexdigest(),
+        "llm_config": context.config["llm"],
+    }
+    return payload, metadata
+
+
+def prepare_inference(context: ThemeContext, manifest_path: Path) -> Path:
+    payload, metadata = prepared_requests(context, manifest_path)
+    run = context.new_run("prepare-llm", extra={
+        "sample_sha256": metadata["manifest_sha256"],
+        "requests_sha256": metadata["requests_sha256"],
+    })
+    path = run.directory / "requests.jsonl"
+    path.write_bytes(payload)
+    run.write_result("requests_metadata", metadata)
+    return path
+
+
 def read_llm_labels(
     context: ThemeContext, path: Path, manifest_path: Path, model_key: str,
 ) -> pd.DataFrame:
     metadata = json.loads((path.parent / "metadata.json").read_text(encoding="utf-8"))
     prompt_path, _ = prompt_config(context)
+    requests_payload, _ = prepared_requests(context, manifest_path)
     if (metadata.get("model_key") != model_key
             or metadata.get("manifest_sha256") != sha256_file(manifest_path)
             or metadata.get("prompts_sha256") != sha256_file(prompt_path)
-            or metadata.get("taxonomy_sha256") != sha256_file(context.taxonomy_path)):
+            or metadata.get("taxonomy_sha256") != sha256_file(context.taxonomy_path)
+            or metadata.get("requests_sha256") != hashlib.sha256(requests_payload).hexdigest()
+            or metadata.get("llm_config") != context.config["llm"]):
         raise ValueError(f"LLM provenance differs: {path}")
     records = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
     latest = {record["record_id"]: record for record in records}

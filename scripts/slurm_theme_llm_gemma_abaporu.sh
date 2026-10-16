@@ -13,11 +13,10 @@
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:?Submit from Benchmark-Horus root}"
 abaporu_home="${HORUS_ABAPORU_HOME:-/mnt/recod/homes/victor.roquetto}"
-test -n "${HORUS_SAMPLE_PATH:-}"
-test -s "$HORUS_SAMPLE_PATH"
+requests="${HORUS_REQUESTS_PATH:?Prepare blind requests with the BERT/audit Python first}"
+test -s "$requests"
 python_bin="${HORUS_GEMMA_PYTHON:-$abaporu_home/venvs/horus_gemma4/bin/python}"
 test -x "$python_bin"
-config="${HORUS_LLM_CONFIG:-experiments/01_quality_audit/theme_agreement_600/configs/theme_llm_600.yaml}"
 output_dir="${HORUS_GEMMA_OUTPUT:-results/theme_llm_600/inference/gemma4_31b}"
 repo="${HORUS_HF_HUB:-$abaporu_home/.cache/huggingface/hub}/models--google--gemma-4-31B-it"
 revision="$(cat "$repo/refs/main")"
@@ -40,6 +39,6 @@ unset MODEL_PATH PYTHON_BIN GDN_PREFILL_BACKEND VLLM_USE_DEEP_GEMM
 unset LIMIT_MM_IMAGE LIMIT_MM_AUDIO LIMIT_MM_VIDEO
 nvidia-smi -L
 printf 'Git: %s\nGemma checkpoint: %s\n' "$(git rev-parse HEAD)" "$checkpoint"
-args=(--config "$config" infer --sample "$HORUS_SAMPLE_PATH" --model-key gemma4_31b --checkpoint "$checkpoint" --output-dir "$output_dir")
+args=(--requests "$requests" --model-key gemma4_31b --checkpoint "$checkpoint" --output-dir "$output_dir")
 if [[ -n "${HORUS_SMOKE_LIMIT:-}" ]]; then args+=(--limit "$HORUS_SMOKE_LIMIT"); fi
-"$python_bin" -m horus_benchmark.audit.theme_llm_cli "${args[@]}"
+"$python_bin" -m horus_benchmark.audit.theme_llm_worker "${args[@]}"

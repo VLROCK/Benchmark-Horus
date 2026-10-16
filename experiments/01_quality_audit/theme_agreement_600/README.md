@@ -19,7 +19,8 @@ de janela de contexto limita comparações causais entre arquiteturas.
 - `configs/theme_llm_600.yaml`: amostragem, modelos e análise.
 - `configs/llm_prompts_v1.yaml`: instruções e exemplos por área.
 - `src/horus_benchmark/audit/theme_llm_600.py`: amostragem e concordância.
-- `src/horus_benchmark/audit/theme_llm_inference.py`: vLLM local retomável.
+- `src/horus_benchmark/audit/theme_llm_worker.py`: vLLM local retomável,
+  sem dependência de pandas, PyArrow, PyYAML ou `pip` no ambiente LLM.
 - `scripts/slurm_theme_llm_*_abaporu.sh`: uma H200 por LLM, ambientes separados.
 - `scripts/slurm_theme_bert_abaporu.sh`: treino e previsão BERT em ambiente
   Python 3.11 isolado. Previsões BERT já produzidas com o mesmo
@@ -89,17 +90,16 @@ Se o login não tiver acesso ao Hugging Face, copie o cache dessa revisão do
 cluster anterior para `$HORUS_ABAPORU_HOME/.cache/huggingface/hub` antes de
 submeter o BERT. Os três arquivos acima precisam estar disponíveis localmente.
 
-Antes de submeter, confira **sem atualizar os ambientes validados** que os
-dois Pythons LLM conseguem importar `numpy`, `pandas`, `pyarrow` e `yaml`,
-além de `torch`, `transformers` e `vllm`. Se faltar uma dependência de leitura
-de dados, resolva isso separadamente da stack CUDA/vLLM e repita o smoke.
+Os ambientes LLM validados não têm PyArrow; o Gemma também não possui `pip`.
+Por isso o ambiente BERT/auditoria prepara uma vez os 600 prompts em JSONL
+versionado, e os workers LLM usam apenas biblioteca padrão, PyTorch,
+Transformers e vLLM. Não instale dependências nos dois ambientes LLM.
 
 ```bash
 export HORUS_GEMMA_PYTHON=/mnt/recod/homes/victor.roquetto/venvs/horus_gemma4/bin/python
 export HORUS_GPTOSS_PYTHON=/mnt/recod/homes/victor.roquetto/miniconda3/envs/horus_gptoss/bin/python
 for python_bin in "$HORUS_GEMMA_PYTHON" "$HORUS_GPTOSS_PYTHON"; do
-  "$python_bin" -c 'import numpy,pandas,pyarrow,yaml,torch,transformers,vllm; print(torch.__version__,transformers.__version__,vllm.__version__)'
-  "$python_bin" -m pip check
+  "$python_bin" -c 'import torch,transformers,vllm; from horus_benchmark.audit.theme_llm_worker import parse_theme; print(torch.__version__,transformers.__version__,vllm.__version__)'
 done
 ```
 
@@ -119,15 +119,28 @@ printf '%s\n' "$HORUS_SAMPLE_PATH" > results/logs/theme_llm_600.sample.path
 export HORUS_SAMPLE_PATH
 ```
 
+Prepare os mesmos prompts cegos para os dois LLMs **no ambiente BERT**. O
+worker verifica o SHA-256 deste JSONL, e a avaliação o reconstrói da amostra
+e da taxonomia para conferir que os modelos receberam as entradas previstas.
+O arquivo preparado não contém fonte, tema original nem resposta humana.
+
+```bash
+export HORUS_SAMPLE_PATH="$(cat results/logs/theme_llm_600.sample.path)"
+export HORUS_REQUESTS_PATH="$("$HORUS_AUDIT_PYTHON" -m horus_benchmark.audit.theme_llm_cli \
+  --config "$HORUS_LLM_CONFIG" prepare --sample "$HORUS_SAMPLE_PATH")"
+printf '%s\n' "$HORUS_REQUESTS_PATH" > results/logs/theme_llm_600.requests.path
+```
+
 Faça um smoke por `sbatch` em diretórios próprios. `HORUS_SMOKE_LIMIT=12`
 seleciona dois textos por área; não consuma o diretório do lote final:
 
 ```bash
 export HORUS_SMOKE_LIMIT=12
+export HORUS_REQUESTS_PATH="$(cat results/logs/theme_llm_600.requests.path)"
 export HORUS_GEMMA_OUTPUT=results/theme_llm_600/smoke/gemma4_31b
 export HORUS_GPTOSS_OUTPUT=results/theme_llm_600/smoke/gpt_oss_120b
-sbatch scripts/slurm_theme_llm_gemma_abaporu.sh
-sbatch scripts/slurm_theme_llm_gptoss_abaporu.sh
+sbatch --time=02:00:00 scripts/slurm_theme_llm_gemma_abaporu.sh
+sbatch --time=02:00:00 scripts/slurm_theme_llm_gptoss_abaporu.sh
 ```
 
 Depois de conferir os logs e as 12 respostas válidas por modelo, submeta o
@@ -138,6 +151,7 @@ snapshots locais (`refs/main`) e o SHA efetivo fica em `metadata.json`.
 
 ```bash
 unset HORUS_SMOKE_LIMIT
+export HORUS_REQUESTS_PATH="$(cat results/logs/theme_llm_600.requests.path)"
 export HORUS_GEMMA_OUTPUT=results/theme_llm_600/inference/gemma4_31b
 export HORUS_GPTOSS_OUTPUT=results/theme_llm_600/inference/gpt_oss_120b
 gemma_job="$(sbatch --parsable scripts/slurm_theme_llm_gemma_abaporu.sh)"
