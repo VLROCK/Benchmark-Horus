@@ -63,18 +63,36 @@ comprimento ou fonte.
 
 ## Execução no cluster
 
-Na raiz do checkout que contém o corpus, execute nesta ordem. O wrapper usa o
-Python de `HORUS_NORMALIZE_PYTHON` ou, por padrão, o ambiente `horus_theme`
-documentado nos demais scripts do projeto. Ajuste a variável se o ambiente
-do cluster for outro. O diretório de saída é novo por ID do job.
+Na raiz do checkout que contém o corpus, execute os passos abaixo **um por vez**.
+Não cole `set -e` em um terminal interativo: uma falha encerra o shell antes
+de você conseguir examinar o erro. O wrapper usa o Python de
+`HORUS_NORMALIZE_PYTHON` ou, por padrão, o ambiente `horus_theme` documentado
+nos demais scripts do projeto. Ajuste a variável se o ambiente do cluster
+for outro. O diretório de saída é novo por ID do job.
 
 ```bash
+set +e
 mkdir -p results/logs
 export HORUS_NORMALIZE_PYTHON="${HORUS_NORMALIZE_PYTHON:-$HOME/miniconda3/envs/horus_theme/bin/python}"
+"$HORUS_NORMALIZE_PYTHON" --version
 "$HORUS_NORMALIZE_PYTHON" -m pip install -e '.[audit,dev]'
-"$HORUS_NORMALIZE_PYTHON" -m pytest tests/test_normalization.py -q
+"$HORUS_NORMALIZE_PYTHON" -m pytest tests/test_normalization.py tests/test_audit_integrity.py -q
+```
+
+**Só depois de todos os testes passarem**, submeta separadamente:
+
+```bash
 sbatch --export=ALL,HORUS_NORMALIZE_STAGE=n1 scripts/slurm_normalize_corpus.sh
 ```
+
+Se qualquer comando falhar, pare antes do `sbatch` e copie a mensagem de erro.
+Não execute o wrapper com `bash scripts/slurm_normalize_corpus.sh`: ele precisa
+das variáveis de ambiente que o Slurm fornece. Se um job tiver sido submetido
+após falha de teste,
+verifique seu estado com `squeue -j ID` e `sacct -j ID --format=JobID,State,ExitCode`.
+Se ainda estiver ativo, cancele-o com `scancel ID` antes de sincronizar o
+código corrigido e repetir o bloco. Preserve a pasta de saída antiga para
+diagnóstico, mas não a utilize como versão validada do corpus.
 
 Quando o job N1 terminar, confirme `verification.json` e compartilhe comigo
 o caminho impresso no log, `summary.json`, `paired_surface_summary.csv` e os

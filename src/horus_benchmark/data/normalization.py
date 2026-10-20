@@ -27,6 +27,7 @@ SPACE_RUN = re.compile(r"[ \t\u00a0]{2,}")
 TRAILING_SPACE = re.compile(r"(?m)[ \t]+$")
 EXCESS_BLANK = re.compile(r"\n{4,}")
 MOJIBAKE = re.compile(r"(?:Ã.|Â.|Ă.|â€|�)")
+MIXED_C3_MOJIBAKE = re.compile(r"Ă([\u0080-\u00bf])")
 ABSTRACT = re.compile(r"(?im)^\s*(?:abstract|résumé|resumen|keywords|palabras clave)\s*:?\s*")
 ABSTRACT_START = re.compile(r"(?im)^[ \t]*(?:abstract|résumé|resumen)[ \t]*:?[^\n]*")
 PORTUGUESE_RESUMO = re.compile(r"(?im)^[ \t]*resumos?[ \t]*:?[^\n]*")
@@ -93,12 +94,18 @@ def _replace(
 
 
 def _repair_mojibake(text: str) -> str:
-    """Accept a whole-text reverse decoding only when suspicion strictly falls.
+    """Reverse unambiguous byte pairs, then try whole-text decoding.
 
-    Whole-text encoding fails on mixed scripts/emoji; those cases stay intact
-    and are flagged. No lossy replacement is ever used.
+    Some UTF-8 C3 byte pairs were decoded through two different single-byte
+    codecs, yielding e.g. ``Ă§`` for ``ç``. Reversing that exact byte pair
+    also works when the rest of the text contains emoji or other scripts.
+    Other repairs still require a unique, lower-suspicion whole-text result.
+    No lossy replacement is ever used.
     """
 
+    text = MIXED_C3_MOJIBAKE.sub(
+        lambda match: bytes((0xC3, ord(match.group(1)))).decode("utf-8"), text
+    )
     before = len(MOJIBAKE.findall(text))
     if before == 0:
         return text

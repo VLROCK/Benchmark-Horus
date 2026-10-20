@@ -30,6 +30,12 @@ def test_recounts_and_repairs_only_clear_mojibake() -> None:
     assert result.original_chars != result.normalized_chars
 
 
+def test_mixed_mojibake_is_repaired_with_other_unicode_present() -> None:
+    result = normalize_text("A posiĂ§Ă£o é esta 🙂", RuleConfig())
+    assert result.text == "A posição é esta 🙂"
+    assert result.operations["MOJIBAKE_REPAIR"] == 1
+
+
 def test_code_example_is_protected_from_html_and_contact_rewrites() -> None:
     text = "Exemplo:\n```html\n<a href=\"https://example.org\">teste</a>\n```"
     result = normalize_text(text, RuleConfig())
