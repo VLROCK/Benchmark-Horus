@@ -1,0 +1,41 @@
+schema_version: 1
+experiment_id: quality-shortcuts-normalized-n1-candidate
+workspace_root: /home/victor.roquetto/Benchmark-Horus
+dataset_config: /home/victor.roquetto/Benchmark-Horus/results/normalization/full-n1-114566/audit_dataset.yaml
+corpus_resource: corpus
+split_resources: []
+benchmark_resource: null
+taxonomy_resource: taxonomy
+lineage_fields: []
+output_root: /home/victor.roquetto/Benchmark-Horus/results/audits
+seed: 2026
+batch_size: 2048
+length_bins_words:
+- 0
+- 150
+- 400
+- 800
+- 1800
+- 5000
+near_duplicates:
+  enabled: true
+  shingle_words: 5
+  bottom_k: 32
+  minimum_shared_fingerprints: 6
+  max_postings_per_fingerprint: 80
+  max_pair_comparisons: 20000000
+  jaccard_threshold: 0.8
+  containment_threshold: 0.9
+  min_tokens: 30
+probes:
+  enabled: true
+  bootstrap_replicates: 200
+  bootstrap_confidence: 0.95
+  text_probe:
+    enabled: true
+    max_train_per_label: 5000
+    max_validation_per_label: 1500
+    max_test_per_label: 1500
+    max_features: 100000
+    min_df: 3
+input_is_normalized_view: true
