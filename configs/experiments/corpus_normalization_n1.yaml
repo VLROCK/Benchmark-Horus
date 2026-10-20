@@ -1,0 +1,17 @@
+schema_version: 1
+experiment_id: corpus-normalization-n1-v1
+workspace_root: ../..
+dataset_config: configs/datasets/horus_full.yaml
+corpus_resource: corpus
+batch_size: 512
+rules:
+  stage: n1
+  repair_mojibake: true
+  replace_contacts: true
+  convert_editorial_html: true
+  remove_strict_terminal_footers: false
+  remove_bounded_parallel_abstracts: false
+  remove_strict_terminal_references: false
+  guard_min_original_words: 50
+  guard_min_lost_words: 20
+  guard_min_retained_fraction: 0.90

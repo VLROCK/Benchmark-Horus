@@ -176,6 +176,8 @@ def _report(
     near_summary: dict[str, Any] | None,
     probes: pd.DataFrame | None,
     benchmark_resource: str | None,
+    normalized_input: bool = False,
+    physical_splits_checked: bool = True,
 ) -> None:
     errors = checks.loc[(checks["severity"] == "error") & (~checks["passed"])]
     warnings = checks.loc[(checks["severity"] == "warning") & (~checks["passed"])]
@@ -194,6 +196,8 @@ def _report(
             "- Este catálogo não inclui um benchmark materializado; as checagens "
             "específicas do benchmark não foram executadas."
         )
+    if not physical_splits_checked:
+        lines.append("- Os Parquets físicos de split não foram comparados com esta view derivada; somente a coluna de split herdada foi preservada.")
     if not groups.empty:
         for field in ("content_sha256_audit", "comparison_sha256_audit", "split_group_id", "human_source_url"):
             match = groups.loc[groups["key_type"] == field]
@@ -224,7 +228,12 @@ def _report(
     lines += [
         "", "## Limites da inferência", "",
         "Esta auditoria não testa contaminação dos dados de pré-treino de LLMs externos. IDs de documento-pai/trecho acadêmico não aparecem no schema atual, logo parentesco entre introdução e conclusão não pode ser descartado por completo.",
-        "Não houve limpeza, seleção, normalização ou alteração de rótulos nesta execução.",
+        (
+            "Esta auditoria leu uma view já normalizada; não realizou nova limpeza, "
+            "seleção ou alteração de rótulos."
+            if normalized_input else
+            "Não houve limpeza, seleção, normalização ou alteração de rótulos nesta execução."
+        ),
     ]
     (directory / "REPORT.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -353,6 +362,8 @@ def run_audit(
     _report(
         run.directory, catalog, features, checks, group_summary, near_summary,
         probes, config.get("benchmark_resource"),
+        normalized_input=bool(config.get("input_is_normalized_view", False)),
+        physical_splits_checked=bool(config["split_resources"]),
     )
     run.write_result("audit_summary", {
         "rows": len(features), "integrity_error_checks_positive": int(
@@ -426,6 +437,8 @@ def recheck_integrity(run_dir: str | Path, config_path: str | Path) -> Path:
     _report(
         directory, catalog, features, checks, group_summary, near_summary,
         probes, config.get("benchmark_resource"),
+        normalized_input=bool(config.get("input_is_normalized_view", False)),
+        physical_splits_checked=bool(config["split_resources"]),
     )
     summary_path = directory / "audit_summary.json"
     summary = json.loads(summary_path.read_text(encoding="utf-8"))

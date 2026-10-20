@@ -234,7 +234,8 @@ def run_integrity_checks(
         | ((features["label"] == 1) & (features["label_name"] != "synthetic"))
         | ~features["label"].isin([0, 1])
     ).sum())
-    add("invalid_split", (~features["split"].isin(split_resources)).sum())
+    if split_resources:
+        add("invalid_split", (~features["split"].isin(split_resources)).sum())
     add("missing_domain", features["broad_area"].isna().sum() + (features["broad_area"] == "").sum())
     add("declared_char_count_mismatch", (features["char_count"] != features["char_count_audit"]).sum(), "warning")
     add("declared_word_count_mismatch", (features["word_count"] != features["word_count_audit"]).sum(), "warning")
@@ -258,7 +259,8 @@ def run_integrity_checks(
     for row in group_summary.itertuples(index=False):
         severity = "warning" if row.key_type in {"source_record_id", "human_source_url"} else "error"
         add(f"cross_split_{row.key_type}_groups", row.cross_split_groups, severity)
-    checks.extend(_physical_partition_checks(catalog, features, split_resources, benchmark_resource))
+    if split_resources:
+        checks.extend(_physical_partition_checks(catalog, features, split_resources, benchmark_resource))
     checks_frame = pd.DataFrame(checks)
     checks_frame["passed"] = checks_frame["count"] == 0
     return checks_frame, group_summary, group_details
