@@ -36,12 +36,44 @@ def test_mixed_mojibake_is_repaired_with_other_unicode_present() -> None:
     assert result.operations["MOJIBAKE_REPAIR"] == 1
 
 
+def test_uppercase_portuguese_is_not_mojibake_or_review() -> None:
+    result = normalize_text("NÃO HÁ CONCLUSÃO SOBRE A ÁREA.", RuleConfig())
+    assert result.text == "NÃO HÁ CONCLUSÃO SOBRE A ÁREA."
+    assert "ENCODING_CANDIDATE" not in result.flags
+    assert result.status == "ok"
+
+
+def test_math_inequalities_are_not_html() -> None:
+    result = normalize_text("Se T < 0,5s e depois T > 2,5s, comparar.", RuleConfig())
+    assert "HTML_REMAINS" not in result.flags
+    assert result.status == "ok"
+
+
+def test_code_declaration_is_not_english_abstract() -> None:
+    result = normalize_text("abstract public class Exemplo { }", RuleConfig())
+    assert "LANG_SECTION" not in result.flags
+    assert result.status == "ok"
+
+
+def test_ambiguous_bibliography_and_placeholder_are_diagnostic_only() -> None:
+    result = normalize_text("Referências\n[Seu Nome]", RuleConfig())
+    assert {"REFERENCES", "PLACEHOLDER"}.issubset(result.flags)
+    assert result.status == "ok"
+
+
+def test_dense_residual_html_requires_three_real_tags() -> None:
+    result = normalize_text("<span>A</span><i>B</i>", RuleConfig())
+    assert "HTML_DENSE_REMAINS" in result.flags
+    assert result.status == "review"
+
+
 def test_code_example_is_protected_from_html_and_contact_rewrites() -> None:
     text = "Exemplo:\n```html\n<a href=\"https://example.org\">teste</a>\n```"
     result = normalize_text(text, RuleConfig())
     assert result.text == text
     assert "CODE_EXAMPLE" in result.flags
     assert "URL_MASK" not in result.operations
+    assert result.status == "ok"
 
 
 def test_contact_mask_keeps_sentence_punctuation() -> None:
@@ -60,7 +92,7 @@ def test_n2_only_removes_a_strict_terminal_footer() -> None:
 def test_n2_parallel_abstract_requires_both_portuguese_boundaries() -> None:
     text = (
         "Resumo\n" + "Este estudo examina a escrita. " * 8 + "\n"
-        "Abstract\n" + "This study examines writing. " * 12 + "\n"
+        "Abstract\n" + "This study examines the writing of texts and methods in our research. " * 5 + "\n"
         "Keywords: writing\nIntrodução\n" + "O corpo permanece em português. " * 20
     )
     n1 = normalize_text(text, RuleConfig(stage="n1"))
@@ -71,13 +103,35 @@ def test_n2_parallel_abstract_requires_both_portuguese_boundaries() -> None:
     assert n2.operations["PARALLEL_ABSTRACT_REMOVE"] == 1
 
 
-def test_n2_terminal_references_requires_substantial_bibliography() -> None:
+def test_n2_keeps_portuguese_abstract_with_english_terminology() -> None:
+    text = (
+        "Resumo\n" + "Pesquisa de linguagem em português. " * 10 + "\n"
+        "Abstract\n" + "Este estudo de machine learning apresenta resultados no Brasil. " * 8 + "\n"
+        "Introdução\n" + "O texto continua em português. " * 20
+    )
+    result = normalize_text(text, RuleConfig(stage="n2"))
+    assert result.text == normalize_text(text, RuleConfig(stage="n1")).text
+    assert "PARALLEL_ABSTRACT_REMOVE" not in result.operations
+
+
+def test_n2_keeps_bibliography_by_default() -> None:
     body = "Pesquisa empírica em língua portuguesa. " * 210
     bibliography = "Referências\nAutor A. Livro, 2001.\nAutor B. Artigo, 2010.\n" + "Outro estudo citado, 2017. " * 12
     result = normalize_text(body + "\n" + bibliography, RuleConfig(stage="n2"))
+    assert result.text.endswith(bibliography.strip())
+    assert "TERMINAL_REFERENCES_CANDIDATE" in result.flags
+    assert "TERMINAL_REFERENCES_REMOVE" not in result.operations
+
+
+def test_n2_terminal_references_requires_substantial_bibliography() -> None:
+    body = "Pesquisa empírica em língua portuguesa. " * 210
+    bibliography = "Referências\nAutor A. Livro, 2001.\nAutor B. Artigo, 2010.\n" + "Outro estudo citado, 2017. " * 12
+    result = normalize_text(body + "\n" + bibliography, RuleConfig(
+        stage="n2", remove_strict_terminal_references=True,
+    ))
     assert "Referências" not in result.text
     assert result.operations["TERMINAL_REFERENCES_REMOVE"] == 1
-    assert result.status == "review"
+    assert result.status == "ok"
 
 
 def test_large_loss_is_flagged_without_exclusion() -> None:
@@ -133,8 +187,10 @@ def test_full_stream_preserves_rows_and_protected_metadata(tmp_path) -> None:
     assert derived[0]["char_count"] == len(original[0]["content"])
     assert derived[1]["content"] == "Aqui há um link: URL"
     assert trace[0]["source_char_count_declared"] == 999
+    assert trace[0]["normalization_review_reasons"] == "SOURCE_HASH_MISMATCH"
     summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
     assert summary["output_rows"] == 2
+    assert (run_dir / "flag_prevalence_by_label_area.csv").is_file()
     build_report(run_dir)
     assert (run_dir / "tables" / "class_gap_delta.csv").is_file()
     blind = export_review(config, run_dir, per_cell=1, maximum=2)

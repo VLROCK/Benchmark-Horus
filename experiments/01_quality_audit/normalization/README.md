@@ -14,21 +14,36 @@ do corpus de origem. A execução cabe ao pesquisador (regra 19 do `AGENTS.md`).
   uma conversão reversível reduz sinais suspeitos; CRLF/controles/espaços;
   `<br>` e `<p>/<div>` editoriais e entidades HTML fora de blocos de código;
   URL/e-mail literais por `URL`/`EMAIL`, também fora de código.
-- **N2 candidata:** N1 mais remoção de uma linha terminal estrita de
+- **N2 conservadora candidata:** N1 mais remoção de uma linha terminal estrita de
   copyright, atualização editorial ou comentário de plataforma; abstract
-  paralelo só quando há resumo português anterior e introdução portuguesa
-  posterior claramente delimitados; bibliografia terminal só com título,
-  corpo anterior substancial e múltiplos anos em entradas finais. Os demais
-  casos são apenas sinalizados. Não remove declaração de hipótese, citação
-  interna, lista, título, Markdown, gíria ou erro gramatical.
-- **Sinalização:** abstracts paralelos, referências, placeholders, preâmbulos,
-  HTML residual, codificação residual, perda substancial e texto vazio vão à
-  fila de revisão. Hash original divergente e flags de idioma/truncamento/
-  raciocínio já existentes também são carregados como alertas, sem orientar a
-  transformação. `MARKUP` é registrado, mas não é defeito por si só. A fila
-  não é uma lista de exclusão. A detecção de idioma completo e de incoerência
+  paralelo só quando há resumo português anterior, introdução portuguesa
+  posterior e evidência lexical forte de inglês no trecho intermediário.
+  Bibliografias **não são removidas** nesta configuração: antes, comparamos
+  sua prevalência entre classes por área e inspecionamos sua função nos
+  gêneros textuais. Os demais casos são apenas sinalizados. Não remove
+  declaração de hipótese, citação interna, lista, título, Markdown, gíria
+  ou erro gramatical.
+- **Sinalização de alta precisão:** `review` exige evidência mais forte:
+  abstract longo com cabeçalho explícito e predomínio de marcadores lexicais
+  ingleses; mojibake residual não ASCII; pelo menos três tags HTML reais
+  residuais fora de código; perda substancial; texto vazio; ou metadado
+  de raciocínio vazado ou hash original divergente.
+  Cabeçalhos de referências, bibliografia terminal provável, placeholders,
+  preâmbulos, HTML isolado/protegido, Markdown, idioma inválido segundo o
+  metadado de origem e provável truncamento ficam apenas como diagnósticos.
+  A fila **não é** uma lista de exclusão. Um falso
+  negativo sutil é preferível a tratar redação autêntica como defeito. A
+  coluna `review_reasons` identifica quais sinais fortes acionaram a fila;
+  `flags` também inclui sinais diagnósticos que não a acionam. A trace
+  Parquet preserva ambos. A detecção de idioma completo e de incoerência
   semântica **não** é resolvida por essas regras: exige auditoria posterior
   (metadados/inspeção assistida), nunca correção automática do estilo.
+  O código usa regras determinísticas, não agentes/LLMs por texto. O indício
+  de inglês usa um limiar de 40 palavras e contagens de palavras funcionais
+  inglesas versus portuguesas; é uma triagem imperfeita, não uma anotação
+  linguística validada. HTML só é reconhecido por nomes de tags conhecidas,
+  sem atravessar linhas; desigualdades matemáticas não devem ser tratadas
+  como tags. Exemplos de código são protegidos da conversão editorial.
 - **Guarda:** com pelo menos 50 palavras originais, perda de pelo menos 20
   palavras e retenção inferior a 90% gera `SUBSTANTIAL_LOSS`. Esses valores
   estão em YAML e são hipóteses de auditoria, não limiares finais de seleção.
@@ -47,7 +62,8 @@ metadados de origem, não uma nova deduplicação; duplicatas surgidas após
 normalização precisam de uma auditoria separada.
 
 Cada rodada ainda produz `summary.json`, `review_queue.csv`,
-`paired_surface_summary.csv`, `verification.json`, tabelas, figuras e
+`paired_surface_summary.csv`, `flag_prevalence_by_label_area.csv`,
+`verification.json`, tabelas, figuras e
 `review_examples_blind.jsonl`/`review_examples_manifest.csv`. A seleção
 determinística de até 480 exemplos de revisão cobre flags por área e controles
 sem flag; não estima prevalências. A planilha de metadados fica separada do
@@ -60,6 +76,11 @@ como texto/CSV sem avaliação automática de fórmulas; não edite os textos br
 `tables/class_gap_delta.csv` mede mudanças descritivas das diferenças entre
 classes por área; não é uma sonda treinada nem substitui controles de gênero,
 comprimento ou fonte.
+`flag_prevalence_by_label_area.csv` usa o número **total** de linhas por classe
+e área como denominador; ao comparar bibliografia, filtre `REFERENCES` (sinal
+amplo) e `TERMINAL_REFERENCES_CANDIDATE` (sinal estrito), sem confundi-los com
+uma contagem validada de bibliografias. A amostra `review_examples_manifest.csv`
+é estratificada por flags e **não** permite inferir prevalência populacional.
 
 ## Execução no cluster
 
@@ -95,8 +116,9 @@ código corrigido e repetir o bloco. Preserve a pasta de saída antiga para
 diagnóstico, mas não a utilize como versão validada do corpus.
 
 Quando o job N1 terminar, confirme `verification.json` e compartilhe comigo
-o caminho impresso no log, `summary.json`, `paired_surface_summary.csv` e os
-exemplos de revisão. Não trate uma pasta contendo `.part` como execução concluída.
+o caminho impresso no log, `summary.json`, `paired_surface_summary.csv`,
+`flag_prevalence_by_label_area.csv` e os exemplos de revisão. Não trate uma
+pasta contendo `.part` como execução concluída.
 N2 é uma **ablação candidata**, não substitui N1 automaticamente. Após
 inspecionarmos N1:
 

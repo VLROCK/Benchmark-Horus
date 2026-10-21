@@ -25,7 +25,7 @@ from horus_benchmark.audit import text_features
 from horus_benchmark.config import load_yaml, resolve_from
 from horus_benchmark.data import DatasetCatalog, DatasetLoader
 from horus_benchmark.data import normalization
-from horus_benchmark.data.normalization import RuleConfig, normalize_text
+from horus_benchmark.data.normalization import RuleConfig, TEXT_REVIEW_FLAGS, normalize_text
 
 
 TRACE_SCHEMA = pa.schema([
@@ -44,6 +44,7 @@ TRACE_SCHEMA = pa.schema([
     pa.field("normalized_words_measured", pa.int64()),
     pa.field("normalization_status", pa.large_string()),
     pa.field("normalization_flags", pa.large_string()),
+    pa.field("normalization_review_reasons", pa.large_string()),
     pa.field("normalization_operations", pa.large_string()),
 ])
 
@@ -53,6 +54,9 @@ FEATURES = (
     "markdown_code_fence", "html_tag", "url_in_content",
     "replacement_character", "tab_character",
 )
+SOURCE_REVIEW_FLAGS = frozenset({
+    "SOURCE_REASONING_FLAG", "SOURCE_HASH_MISMATCH",
+})
 
 
 def sha256_file(path: Path) -> str:
@@ -130,7 +134,7 @@ def run(config_path: Path, output_dir: Path) -> Path:
     seen: set[str] = set()
     overall: Counter[str] = Counter()
     groups: dict[tuple[str, str], dict[str, float]] = defaultdict(lambda: defaultdict(float))
-    review_columns = ["record_id", "broad_area", "flags", "status", "original_words",
+    review_columns = ["record_id", "broad_area", "flags", "review_reasons", "status", "original_words",
                       "normalized_words", "source_sha256", "normalized_sha256"]
     writer = pq.ParquetWriter(normalized_tmp, loader.schema, compression="zstd")
     trace_writer = pq.ParquetWriter(trace_tmp, TRACE_SCHEMA, compression="zstd")
@@ -159,7 +163,8 @@ def run(config_path: Path, output_dir: Path) -> Path:
                         flags.add("SOURCE_REASONING_FLAG")
                     if record["content_hash"] != result.original_sha256:
                         flags.add("SOURCE_HASH_MISMATCH")
-                    status = "review" if flags - {"MARKUP", "CODE_EXAMPLE", "ENCODING_CANDIDATE"} else result.status
+                    review_reasons = flags & (TEXT_REVIEW_FLAGS | SOURCE_REVIEW_FLAGS)
+                    status = "review" if review_reasons else "ok"
                     label = str(record["label_name"])
                     area = str(record["broad_area"])
                     if label not in {"human", "synthetic"}:
@@ -188,7 +193,8 @@ def run(config_path: Path, output_dir: Path) -> Path:
                     if status == "review":
                         review_writer.writerow({
                             "record_id": rid, "broad_area": area,
-                            "flags": ";".join(sorted(flags)), "status": status,
+                            "flags": ";".join(sorted(flags)),
+                            "review_reasons": ";".join(sorted(review_reasons)), "status": status,
                             "original_words": result.original_words,
                             "normalized_words": result.normalized_words,
                             "source_sha256": result.original_sha256,
@@ -208,6 +214,7 @@ def run(config_path: Path, output_dir: Path) -> Path:
                         "normalized_words_measured": result.normalized_words,
                         "normalization_status": status,
                         "normalization_flags": ";".join(sorted(flags)),
+                        "normalization_review_reasons": ";".join(sorted(review_reasons)),
                         "normalization_operations": json.dumps(result.operations, ensure_ascii=False, sort_keys=True),
                     })
                     # Preserve all other source fields, including split and
@@ -246,6 +253,24 @@ def run(config_path: Path, output_dir: Path) -> Path:
                 "review_rows": int(values["status:review"]),
                 **{name: values[name] / count for name in metric_columns},
             })
+    # Diagnostic prevalence is label-aware only *after* class-blind text
+    # normalization. It supports the later bibliography policy decision.
+    all_flags = sorted(key[5:] for key in overall if key.startswith("flag:"))
+    with (output_dir / "flag_prevalence_by_label_area.csv").open(
+        "w", encoding="utf-8", newline=""
+    ) as stream:
+        csv_writer = csv.DictWriter(stream, fieldnames=[
+            "label_name", "broad_area", "flag", "rows", "flag_rows", "rate",
+        ])
+        csv_writer.writeheader()
+        for (label, area), values in sorted(groups.items()):
+            rows = int(values["rows"])
+            for flag in all_flags:
+                flagged = int(values[f"flag:{flag}"])
+                csv_writer.writerow({
+                    "label_name": label, "broad_area": area, "flag": flag,
+                    "rows": rows, "flag_rows": flagged, "rate": flagged / rows,
+                })
     summary = {
         "dataset_id": catalog.dataset_id, "dataset_version": catalog.dataset_version,
         "dataset_status": catalog.status, "source": str(source),

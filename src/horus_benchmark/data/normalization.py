@@ -18,18 +18,20 @@ from dataclasses import dataclass
 EMAIL = re.compile(r"(?<![\w@])[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}(?![\w@])", re.I)
 URL = re.compile(r"(?<![\w@])(?:https?://|www\.)[^\s<>\]\[()]+", re.I)
 HTML_ENTITY = re.compile(r"&(?:#[0-9]+|#x[0-9a-fA-F]+|[A-Za-z][A-Za-z0-9]+);")
-BR_TAG = re.compile(r"<br\s*/?>", re.I)
-PARA_TAG = re.compile(r"</?(?:p|div)\b[^>]*>", re.I)
-HTML_TAG = re.compile(r"<\s*/?\s*[A-Za-z][^>]*>")
+BR_TAG = re.compile(r"<br[ \t]*/?>", re.I)
+PARA_TAG = re.compile(r"</?(?:p|div)\b[^<>\n]{0,500}>", re.I)
+HTML_TAG = re.compile(
+    r"</?(?:a|article|b|blockquote|br|code|div|em|h[1-6]|hr|i|img|li|ol|p|pre|"
+    r"section|span|strong|table|tbody|td|th|thead|tr|u|ul)\b[^<>\n]{0,500}>", re.I
+)
 CODE_BLOCK = re.compile(r"(?m)^\s*(?:```|~~~)|<\s*(?:pre|code)\b", re.I)
 CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 SPACE_RUN = re.compile(r"[ \t\u00a0]{2,}")
 TRAILING_SPACE = re.compile(r"(?m)[ \t]+$")
 EXCESS_BLANK = re.compile(r"\n{4,}")
-MOJIBAKE = re.compile(r"(?:Ã.|Â.|Ă.|â€|�)")
+MOJIBAKE = re.compile(r"(?:[ÃÂĂ][^\x00-\x7f]|â€|�)")
 MIXED_C3_MOJIBAKE = re.compile(r"Ă([\u0080-\u00bf])")
-ABSTRACT = re.compile(r"(?im)^\s*(?:abstract|résumé|resumen|keywords|palabras clave)\s*:?\s*")
-ABSTRACT_START = re.compile(r"(?im)^[ \t]*(?:abstract|résumé|resumen)[ \t]*:?[^\n]*")
+ABSTRACT_START = re.compile(r"(?im)^[ \t]*abstract(?=[ \t]*:|[ \t]*$)[ \t]*:?[ \t]*[^\n]*")
 PORTUGUESE_RESUMO = re.compile(r"(?im)^[ \t]*resumos?[ \t]*:?[^\n]*")
 PORTUGUESE_INTRO = re.compile(r"(?im)^[ \t]*(?:1[.\s-]+)?introdução\b[^\n]*")
 REFERENCES = re.compile(r"(?im)^\s*(?:referências(?: bibliográficas)?|bibliografia|references)\s*$")
@@ -41,6 +43,19 @@ FOOTER = re.compile(
 )
 MARKDOWN = re.compile(r"(?m)^\s{0,3}(?:#{1,6}\s|[-*+]\s|\d+[.)]\s)|\*\*|```|~~~")
 LITERAL_ESCAPE = re.compile(r"\\[nrt]")
+ENGLISH_MARKERS = frozenset(
+    "the of and to in for with this that from are was were have has as we our "
+    "these those which by on an is be study research results methods findings".split()
+)
+PORTUGUESE_MARKERS = frozenset(
+    "de do da dos das que e em para uma um o a os as com por no na nos nas "
+    "este esta estudo pesquisa resultados métodos".split()
+)
+WORD = re.compile(r"[^\W\d_]+", re.UNICODE)
+TEXT_REVIEW_FLAGS = frozenset({
+    "ENGLISH_ABSTRACT_CANDIDATE", "ENCODING_REMAINS", "HTML_DENSE_REMAINS",
+    "SUBSTANTIAL_LOSS", "EMPTY_AFTER",
+})
 
 
 @dataclass(frozen=True)
@@ -51,10 +66,12 @@ class RuleConfig:
     convert_editorial_html: bool = True
     remove_strict_terminal_footers: bool = True
     remove_bounded_parallel_abstracts: bool = True
-    remove_strict_terminal_references: bool = True
+    remove_strict_terminal_references: bool = False
     guard_min_original_words: int = 50
     guard_min_lost_words: int = 20
     guard_min_retained_fraction: float = 0.90
+    min_english_abstract_words: int = 40
+    min_html_residual_tags_for_review: int = 3
 
     def __post_init__(self) -> None:
         if self.stage not in {"n1", "n2"}:
@@ -63,6 +80,8 @@ class RuleConfig:
             raise ValueError("guard_min_retained_fraction must be in [0, 1]")
         if min(self.guard_min_original_words, self.guard_min_lost_words) < 0:
             raise ValueError("word-count guard values must be nonnegative")
+        if self.min_english_abstract_words < 25 or self.min_html_residual_tags_for_review < 2:
+            raise ValueError("Abstract and HTML review thresholds are too permissive")
 
 
 @dataclass(frozen=True)
@@ -131,37 +150,73 @@ def _mask_url(match: re.Match[str]) -> str:
     return "URL" + raw[len(core):]
 
 
-def _remove_parallel_abstract(text: str, operations: Counter[str]) -> str:
-    """Remove only a clearly bounded non-Portuguese front-matter section."""
+def _english_evidence(segment: str, minimum_words: int) -> bool:
+    """Conservative lexical evidence, not a general-purpose language detector."""
 
-    start = ABSTRACT_START.search(text)
-    if start is None or start.start() > len(text) // 4:
+    words = [word.casefold() for word in WORD.findall(segment)]
+    if len(words) < minimum_words:
+        return False
+    english = [word for word in words if word in ENGLISH_MARKERS]
+    portuguese = sum(word in PORTUGUESE_MARKERS for word in words)
+    return len(english) >= 10 and len(set(english)) >= 4 and len(english) > 2 * portuguese
+
+
+def _english_abstract(text: str, minimum_words: int) -> tuple[int, int] | None:
+    """Locate a front/terminal English abstract with an explicit heading."""
+
+    for heading in ABSTRACT_START.finditer(text):
+        if not (heading.start() <= len(text) // 4 or heading.start() >= len(text) * 0.7):
+            continue
+        introduction = PORTUGUESE_INTRO.search(text, heading.end())
+        end = introduction.start() if introduction else min(len(text), heading.end() + 2000)
+        if _english_evidence(text[heading.start():end], minimum_words):
+            return heading.start(), end
+    return None
+
+
+def _remove_parallel_abstract(
+    text: str, operations: Counter[str], minimum_words: int,
+) -> str:
+    """Remove only English text bounded by a Portuguese resumo and introduction."""
+
+    span = _english_abstract(text, minimum_words)
+    if span is None:
         return text
-    if PORTUGUESE_RESUMO.search(text[:start.start()]) is None:
+    start, end = span
+    if start > len(text) // 4 or end > len(text) * 0.6:
         return text
-    introduction = PORTUGUESE_INTRO.search(text, start.end())
-    if introduction is None or introduction.start() > len(text) * 0.6:
+    if PORTUGUESE_RESUMO.search(text[:start]) is None:
         return text
-    if len(text[start.start():introduction.start()].split()) < 25:
+    introduction = PORTUGUESE_INTRO.match(text, end)
+    if introduction is None:
         return text
     operations["PARALLEL_ABSTRACT_REMOVE"] += 1
-    return (text[:start.start()].rstrip() + "\n\n" + text[introduction.start():]).strip()
+    return (text[:start].rstrip() + "\n\n" + text[end:]).strip()
 
 
-def _remove_terminal_references(text: str, operations: Counter[str]) -> str:
-    """Remove a terminal bibliography only when its shape is unmistakable."""
+def _terminal_references_start(text: str) -> int | None:
+    """Find a high-confidence terminal bibliography, without changing text."""
 
     matches = list(REFERENCES.finditer(text))
     if not matches:
-        return text
+        return None
     heading = matches[-1]
     prefix, suffix = text[:heading.start()], text[heading.end():]
     if heading.start() < len(text) * 0.6 or len(prefix.split()) < 200:
-        return text
+        return None
     if len(suffix.split()) < 30 or len(re.findall(r"\b(?:19|20)\d{2}\b", suffix)) < 2:
+        return None
+    return heading.start()
+
+
+def _remove_terminal_references(text: str, operations: Counter[str]) -> str:
+    """Remove a terminal bibliography only when explicitly enabled."""
+
+    start = _terminal_references_start(text)
+    if start is None:
         return text
     operations["TERMINAL_REFERENCES_REMOVE"] += 1
-    return prefix.rstrip()
+    return text[:start].rstrip()
 
 
 def normalize_text(content: str, config: RuleConfig) -> NormalizedText:
@@ -173,10 +228,14 @@ def normalize_text(content: str, config: RuleConfig) -> NormalizedText:
     flags: set[str] = set()
     operations: Counter[str] = Counter()
 
-    if ABSTRACT.search(original):
+    if ABSTRACT_START.search(original):
         flags.add("LANG_SECTION")
+    if _english_abstract(original, config.min_english_abstract_words):
+        flags.add("ENGLISH_ABSTRACT_CANDIDATE")
     if REFERENCES.search(original):
         flags.add("REFERENCES")
+    if _terminal_references_start(original) is not None:
+        flags.add("TERMINAL_REFERENCES_CANDIDATE")
     if PLACEHOLDER.search(original):
         flags.add("PLACEHOLDER")
     if PREAMBLE.search(original):
@@ -218,8 +277,11 @@ def normalize_text(content: str, config: RuleConfig) -> NormalizedText:
             text = converted
     elif HTML_TAG.search(text) or HTML_ENTITY.search(text):
         flags.add("HTML_REVIEW")
-    if HTML_TAG.search(text):
+    residual_tags = list(HTML_TAG.finditer(text))
+    if residual_tags:
         flags.add("HTML_REMAINS")
+        if not code_like and len(residual_tags) >= config.min_html_residual_tags_for_review:
+            flags.add("HTML_DENSE_REMAINS")
 
     if config.replace_contacts and not code_like:
         text = _replace(EMAIL, text, "EMAIL", operations, "EMAIL_MASK")
@@ -247,7 +309,7 @@ def normalize_text(content: str, config: RuleConfig) -> NormalizedText:
     elif FOOTER.search(text):
         flags.add("EDITORIAL_FOOTER")
     if config.stage == "n2" and config.remove_bounded_parallel_abstracts:
-        text = _remove_parallel_abstract(text, operations)
+        text = _remove_parallel_abstract(text, operations, config.min_english_abstract_words)
     if config.stage == "n2" and config.remove_strict_terminal_references:
         text = _remove_terminal_references(text, operations)
 
@@ -264,12 +326,9 @@ def normalize_text(content: str, config: RuleConfig) -> NormalizedText:
         flags.add("SUBSTANTIAL_LOSS")
     if not text:
         flags.add("EMPTY_AFTER")
-    review_flags = {
-        "LANG_SECTION", "REFERENCES", "PLACEHOLDER", "PREAMBLE",
-        "ENCODING_REMAINS", "HTML_REVIEW", "HTML_REMAINS", "CONTACT_REVIEW",
-        "SUBSTANTIAL_LOSS", "EMPTY_AFTER", "LITERAL_ESCAPE",
-    }
-    status = "review" if flags & review_flags else "ok"
+    # Broad markers remain available for prevalence analyses, but do not
+    # automatically put authentic text in the high-precision review queue.
+    status = "review" if flags & TEXT_REVIEW_FLAGS else "ok"
     return NormalizedText(
         text=text, operations=dict(sorted(operations.items())),
         flags=tuple(sorted(flags)), status=status,
