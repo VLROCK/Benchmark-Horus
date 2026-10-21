@@ -36,6 +36,10 @@ def test_second_pass_parser_checks_taxonomy_and_schema() -> None:
         "theme": "incerto", "alternative_themes": ["Tema A", "Tema B"],
         "rationale": "Ambos são plausíveis.",
     }
+    assert parse_second_pass(good.replace("Tema A", "tema a"), allowed) == {
+        "theme": "incerto", "alternative_themes": ["Tema A", "Tema B"],
+        "rationale": "Ambos são plausíveis.",
+    }
     assert parse_second_pass(good.replace("Tema B", "Tema inventado"), allowed) is None
     assert parse_second_pass(good.replace('"rationale":', '"confidence":0.9,"rationale":'), allowed) is None
     assert parse_second_pass("Acho que é Tema A", allowed) is None

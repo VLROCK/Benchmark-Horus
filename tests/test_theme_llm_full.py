@@ -148,6 +148,21 @@ def _fake_outputs(index_path: Path, stage: str, context: ThemeContext) -> None:
                     }) + "\n")
 
 
+def _replace_response(index_path: Path, model: str, record_id: str, raw: str) -> None:
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    for shard in index["shards"]:
+        _, folder = resolve(index_path, shard["shard_id"], model)
+        path = folder / "annotations.jsonl"
+        records = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+        for record in records:
+            if record["record_id"] == record_id:
+                record.update(status="invalid", theme=None, raw_output=raw)
+                path.write_text("".join(json.dumps(row) + "\n" for row in records),
+                                encoding="utf-8")
+                return
+    raise AssertionError(f"Missing fake response for {record_id}")
+
+
 def test_full_corpus_shards_second_pass_and_derived_parquet(tmp_path: Path, monkeypatch) -> None:
     context = _context(tmp_path)
     monkeypatch.setattr(
@@ -185,3 +200,31 @@ def test_append_only_resume_removes_only_incomplete_last_line(tmp_path: Path) ->
     records = _read_existing(path, append_mode=True)
     assert set(records) == {"a"}
     assert path.read_bytes() == b'{"record_id":"a","status":"valid"}\n'
+
+
+def test_invalid_json_is_audited_and_revisited_without_inventing_a_label(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    context = _context(tmp_path)
+    monkeypatch.setattr(
+        "horus_benchmark.audit.theme_llm_full._shared_tokenizers",
+        lambda _context: ({key: ToyTokenizer() for key in MODELS},
+                          {key: f"fingerprint-{key}" for key in MODELS}),
+    )
+    first_index = prepare_full_first(context)
+    _fake_outputs(first_index, "first", context)
+    _replace_response(first_index, MODELS[0], "academic-0", '{"theme":"tema a"}')
+    _replace_response(first_index, MODELS[0], "academic-1", '{"theme":"Tema inventado"}')
+    second_index = prepare_full_second(context, first_index)
+    assert json.loads(second_index.read_text(encoding="utf-8"))["rows"] == 5
+    _fake_outputs(second_index, "second", context)
+    _replace_response(second_index, MODELS[0], "journalistic-1", "resposta sem JSON")
+    summary_path = finalize_full(context, first_index, second_index)
+    rows = pd.read_parquet(summary_path.parent / "human_theme_assignments.parquet")
+    indexed = rows.set_index("record_id")
+    assert indexed.loc["academic-0", "theme_final"] == "Tema A"
+    assert indexed.loc["academic-0", "gemma4_31b_parse_status"] == "normalized_label"
+    assert indexed.loc["academic-1", "theme_final"] == "incerto"
+    assert indexed.loc["academic-1", "assignment_method"] == "parse_failure"
+    assert indexed.loc["journalistic-1", "theme_final"] == "incerto"
+    assert indexed.loc["journalistic-1", "second_gemma4_31b_parse_status"] == "parse_failure"

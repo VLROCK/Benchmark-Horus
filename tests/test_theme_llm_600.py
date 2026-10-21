@@ -33,10 +33,11 @@ def test_long_prompt_examples_match_taxonomy() -> None:
     assert "verbete enciclopédico" in prompts["areas"]["informational"]["guidance"]
 
 
-def test_parser_accepts_only_exact_json_taxonomy_label() -> None:
+def test_parser_accepts_json_taxonomy_label_with_unambiguous_case_normalization() -> None:
     allowed = {"Antropologia", "Biologia", "incerto", "fora_taxonomia"}
     assert parse_theme('{"theme":"Antropologia"}', allowed) == "Antropologia"
     assert parse_theme('pensei nisso {"theme":"Biologia"}', allowed) == "Biologia"
+    assert parse_theme('```json\n{"theme":" biologia "}\n```', allowed) == "Biologia"
     assert parse_theme('{"theme":"Astrologia"}', allowed) is None
     assert parse_theme('O tema é Biologia.', allowed) is None
 

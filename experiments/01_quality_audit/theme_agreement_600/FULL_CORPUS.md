@@ -14,6 +14,11 @@ Concordância nessa passagem pode sofrer ancoragem. Respostas concordantes
 `fora_taxonomia` mantêm esse estado; demais casos sem consenso permanecem
 `incerto`. Textos truncados por limite de contexto também ficam `incerto` e
 são sinalizados. A concordância das LLMs **não mede acurácia temática**.
+O leitor aceita diferenças não ambíguas de maiúsculas e espaços em um nome
+da taxonomia. Se a resposta não contiver um tema válido, registra
+`parse_failure`, usa `incerto` e envia o caso à segunda passagem. Os JSONL
+brutos permanecem para auditoria; nenhum nome fora da lista é remapeado por
+semelhança semântica.
 
 Os pedidos são divididos em arquivos de 1.000 textos. Cada tarefa Slurm guarda
 progresso em JSONL e pode ser retomada com o mesmo índice. Os índices e
@@ -82,6 +87,10 @@ printf 'Primeira passagem Gemma: %s; GPT-OSS: %s\n' "$gemma_first" "$gpt_first"
 textos por modelo pode levar muitas horas ou dias; monitore com `squeue -u
 "$USER"` e `sacct -j "$gemma_first,$gpt_first" --format=JobID,State,ExitCode,Elapsed`.
 Uma tarefa interrompida pode ser reenviada com o mesmo índice e comando.
+Antes de preparar a segunda passagem, confira os arquivos de todos os shards.
+`COMPLETED` no Slurm indica apenas que o processo terminou; não garante que
+cada shard tenha produzido as respostas esperadas. O próprio comando
+`prepare-second` rejeita shards ausentes ou incompletos.
 
 ## 4. Preparar e executar a segunda passagem
 

@@ -18,7 +18,7 @@ from horus_benchmark.audit.theme_llm_600 import (
     MODEL_KEYS, SPECIAL, _shared_prefix, _shared_tokenizers, prompt_config, render_prompt,
 )
 from horus_benchmark.audit.theme_llm_second_pass import render_second_prompt
-from horus_benchmark.audit.theme_llm_worker import parse_second_pass, read_requests
+from horus_benchmark.audit.theme_llm_worker import parse_second_pass, parse_theme, read_requests
 
 
 def _corpus_path(context: ThemeContext) -> Path:
@@ -265,24 +265,40 @@ def _collect(
             raise ValueError(f"Incomplete LLM shard: {folder} ({len(latest)}/{len(expected)})")
         for record_id, record in latest.items():
             request = expected[record_id]
-            if (record.get("status") != "valid"
+            if (record.get("status") not in {"valid", "invalid"}
                     or record.get("broad_area") != request["broad_area"]
-                    or record.get("theme") not in request["allowed_themes"]
                     or record.get("input_truncated") != request["input_truncated"]):
                 raise ValueError(f"Invalid LLM output for {record_id}: {folder}")
-            if index["task_kind"] == "theme_full_second":
+            allowed = set(request["allowed_themes"])
+            theme = record.get("theme")
+            parse_status = "valid"
+            if record["status"] == "valid":
+                if theme not in allowed:
+                    raise ValueError(f"LLM label outside allowed themes for {record_id}: {folder}")
+            elif theme is not None:
+                raise ValueError(f"Invalid-status LLM output has a label for {record_id}: {folder}")
+            elif index["task_kind"] == "theme_full_first":
+                theme = parse_theme(record.get("raw_output", ""), allowed)
+                parse_status = "normalized_label" if theme is not None else "parse_failure"
+            else:
                 parsed = parse_second_pass(
-                    record.get("raw_output", ""), set(request["allowed_themes"]),
+                    record.get("raw_output", ""), allowed,
                 )
+                theme = parsed["theme"] if parsed else None
+                parse_status = "reparsed" if parsed else "parse_failure"
+            if index["task_kind"] == "theme_full_second" and record["status"] == "valid":
+                parsed = parse_second_pass(record.get("raw_output", ""), allowed)
                 if parsed is None or any(record.get(key) != value for key, value in parsed.items()):
                     raise ValueError(f"Invalid second-pass JSON for {record_id}: {folder}")
             records.append({
                 "record_id": record_id, "broad_area": record["broad_area"],
-                model_key: record["theme"],
+                model_key: theme if theme is not None else "incerto",
                 f"{model_key}_truncated": record["input_truncated"],
+                f"{model_key}_parse_status": parse_status,
             })
     frame = pd.DataFrame.from_records(records, columns=[
         "record_id", "broad_area", model_key, f"{model_key}_truncated",
+        f"{model_key}_parse_status",
     ])
     if len(frame) != index["rows"] or frame["record_id"].duplicated().any():
         raise ValueError(f"Collected {model_key} outputs have duplicate or missing IDs")
@@ -383,6 +399,7 @@ def finalize_full(
             raise ValueError(f"Second-pass {key} IDs differ from unresolved first pass")
         values = values.rename(columns={
             key: f"second_{key}", f"{key}_truncated": f"second_{key}_truncated",
+            f"{key}_parse_status": f"second_{key}_parse_status",
         })
         rows = rows.merge(values, on=["record_id", "broad_area"], how="left",
                           validate="one_to_one")
@@ -408,6 +425,13 @@ def finalize_full(
     rows.loc[second_named, "assignment_method"] = "second_pass_consensus"
     rows.loc[second_outside, "theme_final"] = "fora_taxonomia"
     rows.loc[second_outside, "assignment_method"] = "second_pass_outside"
+    parse_failed = rows[[
+        f"{key}_parse_status" for key in MODEL_KEYS
+    ] + [
+        f"second_{key}_parse_status" for key in MODEL_KEYS
+    ]].eq("parse_failure").any(axis=1)
+    rows.loc[rows["assignment_method"].eq("unresolved") & parse_failed,
+             "assignment_method"] = "parse_failure"
     truncated = rows["first_truncated"] | rows[[
         f"second_{key}_truncated" for key in MODEL_KEYS
     ]].fillna(False).any(axis=1)
@@ -417,7 +441,7 @@ def finalize_full(
         "source_rule": "source_bucket", "first_pass_consensus": "named",
         "second_pass_consensus": "named", "first_pass_outside": "outside",
         "second_pass_outside": "outside", "unresolved": "uncertain",
-        "context_truncated": "context_truncated",
+        "parse_failure": "uncertain", "context_truncated": "context_truncated",
     })
     if rows["theme_status"].isna().any() or rows["record_id"].duplicated().any():
         raise ValueError("Final human annotations are incomplete or duplicated")
@@ -425,6 +449,8 @@ def finalize_full(
         "record_id", "broad_area", "source_name", "split", "theme_original",
         "theme_final", "theme_status", "assignment_method", "gemma4_31b",
         "gpt_oss_120b", "second_gemma4_31b", "second_gpt_oss_120b",
+        "gemma4_31b_parse_status", "gpt_oss_120b_parse_status",
+        "second_gemma4_31b_parse_status", "second_gpt_oss_120b_parse_status",
     ]].copy()
     run = context.new_run("materialize-full", extra={
         "corpus_sha256": first_index["corpus_sha256"],
@@ -440,6 +466,8 @@ def finalize_full(
     new_columns = assignments[[
         "record_id", "theme_final", "theme_status", "assignment_method",
         "gemma4_31b", "gpt_oss_120b", "second_gemma4_31b", "second_gpt_oss_120b",
+        "gemma4_31b_parse_status", "gpt_oss_120b_parse_status",
+        "second_gemma4_31b_parse_status", "second_gpt_oss_120b_parse_status",
     ]]
     corpus = corpus.merge(new_columns, on="record_id", how="left", validate="one_to_one")
     human = corpus["label_name"].eq("human")
@@ -465,6 +493,12 @@ def finalize_full(
         "corpus_rows": len(corpus), "human_rows": int(human.sum()),
         "synthetic_rows": int((~human).sum()),
         "assignment_methods": rows["assignment_method"].value_counts().to_dict(),
+        "parse_status_by_model": {
+            key: rows[key].value_counts().to_dict() for key in (
+                "gemma4_31b_parse_status", "gpt_oss_120b_parse_status",
+                "second_gemma4_31b_parse_status", "second_gpt_oss_120b_parse_status",
+            )
+        },
         "by_area_status": rows.groupby(["broad_area", "theme_status"]).size()
         .reset_index(name="rows").to_dict(orient="records"),
         "first_requests": first_index["rows"],

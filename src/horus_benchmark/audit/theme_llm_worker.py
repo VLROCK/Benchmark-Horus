@@ -12,6 +12,7 @@ import json
 import os
 import re
 import sys
+import unicodedata
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -28,8 +29,17 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _canonical_label(label: str, allowed: set[str]) -> str | None:
+    if label in allowed:
+        return label
+    normalized = " ".join(unicodedata.normalize("NFKC", label).casefold().split())
+    matches = [theme for theme in allowed if
+               " ".join(unicodedata.normalize("NFKC", theme).casefold().split()) == normalized]
+    return matches[0] if len(matches) == 1 else None
+
+
 def parse_theme(response: str, allowed: set[str]) -> str | None:
-    """Read the final JSON theme; never infer a label from free-form prose."""
+    """Read a JSON theme, allowing only unambiguous case/spacing normalization."""
     response = re.split(r"<\|(?:im_sep|meta_sep)\|>final", response)[-1]
     decoder = json.JSONDecoder()
     last_theme: str | None = None
@@ -40,7 +50,7 @@ def parse_theme(response: str, allowed: set[str]) -> str | None:
             continue
         if isinstance(value, dict) and isinstance(value.get("theme"), str):
             last_theme = value["theme"].strip()
-    return last_theme if last_theme in allowed else None
+    return _canonical_label(last_theme, allowed) if last_theme is not None else None
 
 
 def parse_second_pass(response: str, allowed: set[str]) -> dict[str, Any] | None:
@@ -59,21 +69,24 @@ def parse_second_pass(response: str, allowed: set[str]) -> dict[str, Any] | None
         "theme", "alternative_themes", "rationale",
     }:
         return None
-    theme = decision["theme"]
+    raw_theme = decision["theme"]
     alternatives = decision["alternative_themes"]
     rationale = decision["rationale"]
     named = allowed - {"incerto", "fora_taxonomia"}
-    if (not isinstance(theme, str) or theme not in allowed
+    if (not isinstance(raw_theme, str)
             or not isinstance(alternatives, list) or len(alternatives) > 2
-            or len(set(map(str, alternatives))) != len(alternatives)
-            or any(not isinstance(item, str) or item not in named for item in alternatives)
+            or any(not isinstance(item, str) for item in alternatives)
             or not isinstance(rationale, str) or not 1 <= len(rationale.strip()) <= 700):
         return None
-    if theme in alternatives:
+    theme = _canonical_label(raw_theme.strip(), allowed)
+    canonical_alternatives = [_canonical_label(item.strip(), named) for item in alternatives]
+    if (theme is None or any(item is None for item in canonical_alternatives)
+            or len(set(canonical_alternatives)) != len(canonical_alternatives)
+            or theme in canonical_alternatives):
         return None
     return {
         "theme": theme,
-        "alternative_themes": alternatives,
+        "alternative_themes": canonical_alternatives,
         "rationale": rationale.strip(),
     }
 
