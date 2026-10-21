@@ -16,7 +16,7 @@ from horus_benchmark.audit.theme_llm_600 import (
     MODEL_KEYS, SPECIAL, _consensus, _shared_tokenizers, checked_manifest,
     prompt_config, read_llm_labels,
 )
-from horus_benchmark.audit.theme_llm_worker import parse_second_pass
+from horus_benchmark.audit.theme_llm_worker import parse_second_pass, read_jsonl
 
 
 def _settings(context: ThemeContext) -> tuple[dict[str, Any], Path, dict[str, Any]]:
@@ -188,8 +188,7 @@ def _second_labels(
     }
     if any(worker_meta.get(key) != value for key, value in expected.items()):
         raise ValueError(f"Second-pass provenance differs: {path}")
-    records = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()
-               if line.strip()]
+    records = read_jsonl(path)
     if len(records) != len(target_ids) or {item["record_id"] for item in records} != target_ids:
         raise ValueError(f"Second-pass IDs differ for {model_key}")
     for record in records:

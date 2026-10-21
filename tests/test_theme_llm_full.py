@@ -14,7 +14,7 @@ from horus_benchmark.audit.theme_llm_full import (
     finalize_full, prepare_full_first, prepare_full_second,
 )
 from horus_benchmark.audit.theme_llm_full_shard import resolve
-from horus_benchmark.audit.theme_llm_worker import _read_existing, read_requests
+from horus_benchmark.audit.theme_llm_worker import _read_existing, read_jsonl, read_requests
 from horus_benchmark.data import DatasetCatalog
 
 
@@ -39,7 +39,11 @@ def _context(tmp_path: Path) -> ThemeContext:
                 "source_name": "Corpus Carolina - Wikipédia" if area == "informational" else "source",
                 "theme": "raw human theme", "subtheme": "unchanged", "generator": None,
                 "split": ("train", "validation", "test")[len(records) % 3],
-                "word_count": 4, "content": f"Texto humano {area} {index}.",
+                "word_count": 4, "content": (
+                    f"Texto humano {area} {index}.\u2028Continuação."
+                    if area == "academic" and index == 0
+                    else f"Texto humano {area} {index}."
+                ),
             })
     for index in range(3):
         records.append({
@@ -140,12 +144,15 @@ def _fake_outputs(index_path: Path, stage: str, context: ThemeContext) -> None:
                         "record_id": record_id, "broad_area": request["broad_area"],
                         "theme": theme, "status": "valid",
                         "input_truncated": request["input_truncated"],
+                        "raw_output": ('{"theme":"Tema A"}\u2028'
+                                       if stage == "first" and record_id == "academic-0"
+                                       else json.dumps({"theme": theme})),
                         **({"alternative_themes": [], "rationale": "Tema central.",
                             "raw_output": json.dumps({
                                 "theme": theme, "alternative_themes": [],
                                 "rationale": "Tema central.",
                             })} if stage == "second" else {}),
-                    }) + "\n")
+                    }, ensure_ascii=False) + "\n")
 
 
 def _replace_response(index_path: Path, model: str, record_id: str, raw: str) -> None:
@@ -153,11 +160,11 @@ def _replace_response(index_path: Path, model: str, record_id: str, raw: str) ->
     for shard in index["shards"]:
         _, folder = resolve(index_path, shard["shard_id"], model)
         path = folder / "annotations.jsonl"
-        records = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+        records = read_jsonl(path)
         for record in records:
             if record["record_id"] == record_id:
                 record.update(status="invalid", theme=None, raw_output=raw)
-                path.write_text("".join(json.dumps(row) + "\n" for row in records),
+                path.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in records),
                                 encoding="utf-8")
                 return
     raise AssertionError(f"Missing fake response for {record_id}")

@@ -308,7 +308,9 @@ def read_llm_labels(
             or metadata.get("requests_sha256") != hashlib.sha256(requests_payload).hexdigest()
             or metadata.get("llm_config") != context.config["llm"]):
         raise ValueError(f"LLM provenance differs: {path}")
-    records = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    from horus_benchmark.audit.theme_llm_worker import read_jsonl
+
+    records = read_jsonl(path)
     latest = {record["record_id"]: record for record in records}
     manifest = checked_manifest(context, manifest_path)
     expected = set(manifest["record_id"])

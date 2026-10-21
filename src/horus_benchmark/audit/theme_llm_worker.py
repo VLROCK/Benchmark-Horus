@@ -21,6 +21,12 @@ from typing import Any
 MODEL_KEYS = ("gemma4_31b", "gpt_oss_120b")
 
 
+def read_jsonl(path: Path) -> list[dict[str, Any]]:
+    """Split JSONL only at actual file newlines, not Unicode separators in strings."""
+    with path.open("r", encoding="utf-8") as stream:
+        return [json.loads(line) for line in stream if line.strip()]
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -104,8 +110,7 @@ def read_requests(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         raise ValueError("Prepared request row count is invalid")
     if metadata.get("requests_sha256") != sha256_file(path):
         raise ValueError("Prepared requests differ from their recorded SHA-256")
-    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()
-            if line.strip()]
+    rows = read_jsonl(path)
     if len(rows) != metadata["rows"] or len({row["record_id"] for row in rows}) != len(rows):
         raise ValueError("Prepared requests have missing or duplicate IDs")
     areas = Counter(row["broad_area"] for row in rows)
@@ -158,10 +163,8 @@ def _read_existing(path: Path, *, append_mode: bool) -> dict[str, dict[str, Any]
     if not path.exists():
         return records
     if not append_mode:
-        for line in path.read_text(encoding="utf-8").splitlines():
-            if line.strip():
-                record = json.loads(line)
-                records[record["record_id"]] = record
+        for record in read_jsonl(path):
+            records[record["record_id"]] = record
         return records
     with path.open("r+b") as stream:
         while True:

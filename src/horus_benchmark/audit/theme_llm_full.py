@@ -18,7 +18,9 @@ from horus_benchmark.audit.theme_llm_600 import (
     MODEL_KEYS, SPECIAL, _shared_prefix, _shared_tokenizers, prompt_config, render_prompt,
 )
 from horus_benchmark.audit.theme_llm_second_pass import render_second_prompt
-from horus_benchmark.audit.theme_llm_worker import parse_second_pass, parse_theme, read_requests
+from horus_benchmark.audit.theme_llm_worker import (
+    parse_second_pass, parse_theme, read_jsonl, read_requests,
+)
 
 
 def _corpus_path(context: ThemeContext) -> Path:
@@ -256,11 +258,7 @@ def _collect(
                     meta.get("upstream_index_sha256") != index["upstream_index_sha256"])):
             raise ValueError(f"LLM output provenance differs: {folder}")
         expected = {row["record_id"]: row for row in requests}
-        latest = {}
-        for line in output_path.read_text(encoding="utf-8").splitlines():
-            if line.strip():
-                record = json.loads(line)
-                latest[record["record_id"]] = record
+        latest = {record["record_id"]: record for record in read_jsonl(output_path)}
         if set(latest) != set(expected):
             raise ValueError(f"Incomplete LLM shard: {folder} ({len(latest)}/{len(expected)})")
         for record_id, record in latest.items():

@@ -7,8 +7,8 @@
 #SBATCH --cpus-per-task=32
 #SBATCH --mem=256G
 #SBATCH --time=36:00:00
-#SBATCH --output=results/logs/horus-gptoss-theme-%j.out
-#SBATCH --error=results/logs/horus-gptoss-theme-%j.err
+#SBATCH --output=results/logs/horus-gptoss-theme-%A_%a.out
+#SBATCH --error=results/logs/horus-gptoss-theme-%A_%a.err
 
 set -euo pipefail
 cd "${SLURM_SUBMIT_DIR:?Submit from Benchmark-Horus root}"
@@ -44,7 +44,11 @@ export TOKENIZERS_PARALLELISM=false
 unset MODEL_PATH PYTHON_BIN GDN_PREFILL_BACKEND VLLM_USE_DEEP_GEMM
 unset VLLM_USE_FLASHINFER_SAMPLER LIMIT_MM_IMAGE LIMIT_MM_AUDIO LIMIT_MM_VIDEO
 nvidia-smi -L
-printf 'Git: %s\nGPT-OSS checkpoint: %s\n' "$(git rev-parse HEAD)" "$checkpoint"
+git_revision="unavailable"
+if command -v git >/dev/null 2>&1; then
+  git_revision="$(git rev-parse HEAD)"
+fi
+printf 'Git: %s\nGPT-OSS checkpoint: %s\n' "$git_revision" "$checkpoint"
 args=(--requests "$requests" --model-key gpt_oss_120b --checkpoint "$checkpoint" --output-dir "$output_dir")
 if [[ -n "${HORUS_SMOKE_LIMIT:-}" ]]; then
   args+=(--limit "$HORUS_SMOKE_LIMIT" --limit-strategy "${HORUS_SMOKE_STRATEGY:-first}")

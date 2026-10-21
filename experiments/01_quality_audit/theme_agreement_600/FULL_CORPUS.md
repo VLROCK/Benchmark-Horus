@@ -87,6 +87,11 @@ printf 'Primeira passagem Gemma: %s; GPT-OSS: %s\n' "$gemma_first" "$gpt_first"
 textos por modelo pode levar muitas horas ou dias; monitore com `squeue -u
 "$USER"` e `sacct -j "$gemma_first,$gpt_first" --format=JobID,State,ExitCode,Elapsed`.
 Uma tarefa interrompida pode ser reenviada com o mesmo índice e comando.
+Se um shard antigo falhou ao ler JSONL com separadores Unicode dentro do
+texto, atualize o código com `git pull` e reenvie somente os shards sem saída.
+Os pedidos preparados e seus hashes continuam válidos; não é preciso gerar
+um novo índice. As saídas novas usam `%A_%a` nos nomes dos logs do Slurm para
+identificar diretamente o array e o shard.
 Antes de preparar a segunda passagem, confira os arquivos de todos os shards.
 `COMPLETED` no Slurm indica apenas que o processo terminou; não garante que
 cada shard tenha produzido as respostas esperadas. O próprio comando
