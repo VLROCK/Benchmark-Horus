@@ -34,7 +34,7 @@ MIXED_C3_MOJIBAKE = re.compile(r"Ă([\u0080-\u00bf])")
 ABSTRACT_START = re.compile(r"(?im)^[ \t]*abstract(?=[ \t]*:|[ \t]*$)[ \t]*:?[ \t]*[^\n]*")
 PORTUGUESE_RESUMO = re.compile(r"(?im)^[ \t]*resumos?[ \t]*:?[^\n]*")
 PORTUGUESE_INTRO = re.compile(r"(?im)^[ \t]*(?:1[.\s-]+)?introdução\b[^\n]*")
-REFERENCES = re.compile(r"(?im)^\s*(?:referências(?: bibliográficas)?|bibliografia|references)\s*$")
+REFERENCES = re.compile(r"(?im)^[ \t]*(?:referências(?: bibliográficas)?|bibliografia|references)[ \t]*$")
 PLACEHOLDER = re.compile(r"(?i)\[(?:insira|inserir|assinatura|seu nome|nome aqui)[^\]]{0,80}\]")
 PREAMBLE = re.compile(r"(?is)^\s*(?:aqui (?:está|esta|segue)|segue (?:abaixo|o texto)|claro[,!])\b.{0,100}[:\n]")
 FOOTER = re.compile(
@@ -54,7 +54,7 @@ PORTUGUESE_MARKERS = frozenset(
 WORD = re.compile(r"[^\W\d_]+", re.UNICODE)
 TEXT_REVIEW_FLAGS = frozenset({
     "ENGLISH_ABSTRACT_CANDIDATE", "ENCODING_REMAINS", "HTML_DENSE_REMAINS",
-    "SUBSTANTIAL_LOSS", "EMPTY_AFTER",
+    "SUBSTANTIAL_LOSS", "EMPTY_AFTER", "N2_GUARD_RETAINED",
 })
 
 
@@ -96,6 +96,17 @@ class NormalizedText:
     normalized_chars: int
     original_words: int
     normalized_words: int
+
+
+@dataclass(frozen=True)
+class N2Edit:
+    """A proposed, class-blind span in the N1-normalized text."""
+
+    kind: str
+    start: int
+    end: int
+    replacement: str = ""
+    count: int = 1
 
 
 def _sha(value: str) -> str:
@@ -174,24 +185,26 @@ def _english_abstract(text: str, minimum_words: int) -> tuple[int, int] | None:
     return None
 
 
-def _remove_parallel_abstract(
-    text: str, operations: Counter[str], minimum_words: int,
-) -> str:
-    """Remove only English text bounded by a Portuguese resumo and introduction."""
+def _parallel_abstract_span(text: str, minimum_words: int) -> tuple[int, int] | None:
+    """Require an English Abstract and explicit Portuguese section boundaries."""
 
-    span = _english_abstract(text, minimum_words)
-    if span is None:
-        return text
-    start, end = span
-    if start > len(text) // 4 or end > len(text) * 0.6:
-        return text
-    if PORTUGUESE_RESUMO.search(text[:start]) is None:
-        return text
-    introduction = PORTUGUESE_INTRO.match(text, end)
-    if introduction is None:
-        return text
-    operations["PARALLEL_ABSTRACT_REMOVE"] += 1
-    return (text[:start].rstrip() + "\n\n" + text[end:]).strip()
+    for heading in ABSTRACT_START.finditer(text):
+        if heading.start() > len(text) // 4:
+            continue
+        previous_resumo = PORTUGUESE_RESUMO.search(text[:heading.start()])
+        next_resumo = PORTUGUESE_RESUMO.search(text, heading.end())
+        next_intro = PORTUGUESE_INTRO.search(text, heading.end())
+        if previous_resumo and next_intro and next_intro.start() <= len(text) * 0.6:
+            end = next_intro.start()
+        elif not previous_resumo and next_resumo and next_intro and (
+            next_resumo.start() < next_intro.start() <= len(text) * 0.6
+        ):
+            end = next_resumo.start()
+        else:
+            continue
+        if _english_evidence(text[heading.start():end], minimum_words):
+            return heading.start(), end
+    return None
 
 
 def _terminal_references_start(text: str) -> int | None:
@@ -201,22 +214,73 @@ def _terminal_references_start(text: str) -> int | None:
     if not matches:
         return None
     heading = matches[-1]
+    # Some scraped pages contain an empty "Referências" heading immediately
+    # before "Bibliografia". Keep neither orphaned in the derived text.
+    for previous in reversed(matches[:-1]):
+        if text[previous.end():heading.start()].strip():
+            break
+        heading = previous
     prefix, suffix = text[:heading.start()], text[heading.end():]
     if heading.start() < len(text) * 0.6 or len(prefix.split()) < 200:
         return None
-    if len(suffix.split()) < 30 or len(re.findall(r"\b(?:19|20)\d{2}\b", suffix)) < 2:
+    dated_lines = [line for line in suffix.splitlines()
+                   if re.search(r"\b(?:19|20)\d{2}\b", line)]
+    if len(suffix.split()) < 30 or len(dated_lines) < 3:
         return None
     return heading.start()
 
 
-def _remove_terminal_references(text: str, operations: Counter[str]) -> str:
-    """Remove a terminal bibliography only when explicitly enabled."""
+def propose_n2_edits(text: str, config: RuleConfig) -> tuple[N2Edit, ...]:
+    """Locate auditable N2 cuts without using label, source, or split metadata."""
 
-    start = _terminal_references_start(text)
-    if start is None:
-        return text
-    operations["TERMINAL_REFERENCES_REMOVE"] += 1
-    return text[:start].rstrip()
+    if config.stage != "n2":
+        raise ValueError("N2 proposals require a stage=n2 configuration")
+    candidates: list[N2Edit] = []
+    if config.remove_bounded_parallel_abstracts:
+        span = _parallel_abstract_span(text, config.min_english_abstract_words)
+        if span is not None:
+            candidates.append(N2Edit("PARALLEL_ABSTRACT_REMOVE", *span, "\n\n"))
+    if config.remove_strict_terminal_references:
+        start = _terminal_references_start(text)
+        if start is not None:
+            candidates.append(N2Edit("TERMINAL_REFERENCES_REMOVE", start, len(text)))
+    if config.remove_strict_terminal_footers:
+        lines = text.splitlines(keepends=True)
+        start, removed = len(text), 0
+        for line in reversed(lines):
+            if not FOOTER.fullmatch(line.strip()):
+                break
+            start -= len(line)
+            removed += 1
+        if removed:
+            candidates.append(N2Edit("TERMINAL_FOOTER", start, len(text), count=removed))
+    accepted: list[N2Edit] = []
+    for edit in sorted(candidates, key=lambda item: (item.start, -item.end)):
+        if not accepted or edit.start >= accepted[-1].end:
+            accepted.append(edit)
+    return tuple(accepted)
+
+
+def apply_n2_edits(text: str, edits: tuple[N2Edit, ...]) -> str:
+    """Apply validated, non-overlapping spans relative to the N1 text."""
+
+    result = text
+    for edit in reversed(edits):
+        if not 0 <= edit.start < edit.end <= len(text):
+            raise ValueError("Invalid N2 span")
+        result = result[:edit.start] + edit.replacement + result[edit.end:]
+    return result.strip()
+
+
+def n2_loss_guard(before: str, after: str, config: RuleConfig) -> bool:
+    """Veto a substantial N2-only loss; N1's existing changes are unaffected."""
+
+    original_words, retained_words = len(before.split()), len(after.split())
+    return (
+        original_words >= config.guard_min_original_words
+        and original_words - retained_words >= config.guard_min_lost_words
+        and retained_words / original_words < config.guard_min_retained_fraction
+    )
 
 
 def normalize_text(content: str, config: RuleConfig) -> NormalizedText:
@@ -297,21 +361,18 @@ def normalize_text(content: str, config: RuleConfig) -> NormalizedText:
         operations["EDGE_SPACE"] += 1
         text = trimmed
 
-    if config.stage == "n2" and config.remove_strict_terminal_footers:
-        lines = text.splitlines()
-        removed = 0
-        while lines and FOOTER.fullmatch(lines[-1].strip()):
-            lines.pop()
-            removed += 1
-        if removed:
-            text = "\n".join(lines).rstrip()
-            operations["TERMINAL_FOOTER"] += removed
+    if config.stage == "n2":
+        edits = propose_n2_edits(text, config)
+        if edits:
+            proposed = apply_n2_edits(text, edits)
+            if n2_loss_guard(text, proposed, config):
+                flags.add("N2_GUARD_RETAINED")
+            else:
+                text = proposed
+                for edit in edits:
+                    operations[edit.kind] += edit.count
     elif FOOTER.search(text):
         flags.add("EDITORIAL_FOOTER")
-    if config.stage == "n2" and config.remove_bounded_parallel_abstracts:
-        text = _remove_parallel_abstract(text, operations, config.min_english_abstract_words)
-    if config.stage == "n2" and config.remove_strict_terminal_references:
-        text = _remove_terminal_references(text, operations)
 
     # Remaining structural issues are detection-only until segment boundaries
     # have been validated. No model rewrites the content.
