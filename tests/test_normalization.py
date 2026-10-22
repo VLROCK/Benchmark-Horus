@@ -18,6 +18,7 @@ from horus_benchmark.data.normalization_review import export_review
 from horus_benchmark.data.prepare_normalized_audit import prepare
 from horus_benchmark.data.preview_n2 import run as preview_n2
 from horus_benchmark.data.verify_normalization import verify
+from horus_benchmark.data.verify_hash_repair import run as verify_hash_repair
 
 
 def test_preserves_natural_hypothetical_and_colloquial_writing() -> None:
@@ -162,6 +163,34 @@ def test_n2_leading_english_abstract_requires_portuguese_resumo_and_intro() -> N
     assert "PARALLEL_ABSTRACT_REMOVE" in result.operations
 
 
+def test_n2_preserves_content_between_abstract_and_introduction() -> None:
+    abstract = "This study examines the writing of texts and methods in our research. " * 6
+    text = (
+        "Resumo\n" + "Pesquisa em português. " * 20 + "\n"
+        "Abstract\n" + abstract + "\n"
+        "Key words: writing and methods\n"
+        "Detetive 2\nTive tive\nMeu pai é detetive\n"
+        "Introdução\n" + "O corpo permanece em português. " * 100
+    )
+    result = normalize_text(text, RuleConfig(stage="n2"))
+    assert result.text == normalize_text(text, RuleConfig(stage="n1")).text
+    assert "PARALLEL_ABSTRACT_REMOVE" not in result.operations
+
+
+def test_n2_stops_at_other_language_section_not_introduction() -> None:
+    abstract = "This study examines the writing of texts and methods in our research. " * 6
+    text = (
+        "Resumo\n" + "Pesquisa em português. " * 20 + "\n"
+        "Abstract\n" + abstract + "\n"
+        "Resumen\nEste texto apresenta resultados.\n"
+        "Introdução\n" + "O corpo permanece em português. " * 100
+    )
+    result = normalize_text(text, RuleConfig(stage="n2"))
+    assert "Abstract" not in result.text
+    assert "Resumen" in result.text
+    assert "Introdução" in result.text
+
+
 def test_n2_proposals_have_stable_spans_and_no_class_input() -> None:
     text = "Pesquisa extensa em português. " * 210
     text += "\nReferências\nA. Livro, 2001.\nB. Artigo, 2010.\nC. Estudo, 2017.\n" + "Outra obra. " * 20
@@ -265,6 +294,11 @@ def test_full_stream_preserves_rows_and_protected_metadata(tmp_path) -> None:
     diagnostic = json.loads((diagnostic_dir / "summary.json").read_text(encoding="utf-8"))
     assert diagnostic["counts"]["content_hash_mismatch"] == 2
     assert diagnostic["counts"]["word_count_mismatch"] == 2
+    repair_dir = tmp_path / "results" / "hash-repair"
+    verify_hash_repair(config, diagnostic_dir, run_dir, repair_dir)
+    repair = json.loads((repair_dir / "summary.json").read_text(encoding="utf-8"))
+    assert repair["mismatched_source_hashes"] == 2
+    assert repair["different_text_same_sha256_pairs"] == 0
     n2_config = tmp_path / "n2.yaml"
     n2_raw = {**normal_cfg, "rules": {"stage": "n2", "remove_strict_terminal_references": True}}
     n2_config.write_text(yaml.safe_dump(n2_raw), encoding="utf-8")

@@ -145,9 +145,18 @@ def run(config_path: Path, n1_run_dir: Path, output_dir: Path, *,
                              "source_name": source_name, "rows": counts["rows"],
                              **{key: counts[key] for key in keys}})
     selected: dict[str, tuple[dict, dict]] = {}
+    # Sampling is post hoc only. Keep rare class/source footer cells visible
+    # and export every abstract cut so its boundary can be checked.
     for kind, rows in sorted(examples.items()):
-        for _, blind, manifest in sorted(rows)[:examples_per_kind]:
-            selected.setdefault(blind["record_id"], (blind, manifest))
+        buckets: dict[tuple[str, str], list[tuple[str, dict, dict]]] = defaultdict(list)
+        for row in rows:
+            manifest = row[2]
+            source_cell = manifest["source_name"] if kind == "TERMINAL_FOOTER" else ""
+            buckets[(manifest["label_name"], source_cell)].append(row)
+        for bucket in sorted(buckets):
+            limit = len(buckets[bucket]) if kind == "PARALLEL_ABSTRACT_REMOVE" else examples_per_kind
+            for _, blind, manifest in sorted(buckets[bucket])[:limit]:
+                selected.setdefault(blind["record_id"], (blind, manifest))
     with (output_dir / "n2_examples_blind.jsonl").open("w", encoding="utf-8") as stream:
         for blind, _ in selected.values():
             stream.write(json.dumps(blind, ensure_ascii=False) + "\n")

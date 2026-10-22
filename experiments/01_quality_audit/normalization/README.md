@@ -1,4 +1,4 @@
-# Normalização do corpus completo — N1 e N2 candidata
+# Normalização do corpus completo — N1 e N2 conservadora
 
 **Entrada única:** recurso `corpus` de `configs/datasets/horus_full.yaml`, hoje
 `dataset_final_completo/data/all.parquet` (195.154 registros). Nenhum arquivo
@@ -14,13 +14,15 @@ do corpus de origem. A execução cabe ao pesquisador (regra 19 do `AGENTS.md`).
   uma conversão reversível reduz sinais suspeitos; CRLF/controles/espaços;
   `<br>` e `<p>/<div>` editoriais e entidades HTML fora de blocos de código;
   URL/e-mail literais por `URL`/`EMAIL`, também fora de código.
-- **N2 conservadora candidata:** N1 mais remoção de uma linha terminal estrita de
+- **N2 conservadora:** N1 mais remoção de uma linha terminal estrita de
   copyright, atualização editorial ou comentário de plataforma; abstract
-  paralelo só quando há resumo português anterior, introdução portuguesa
-  posterior e evidência lexical forte de inglês no trecho intermediário.
-  Bibliografias **não são removidas** nesta configuração: antes, comparamos
-  sua prevalência entre classes por área e inspecionamos sua função nos
-  gêneros textuais. Os demais casos são apenas sinalizados. Não remove
+  paralelo em inglês só quando há resumo português, introdução posterior,
+  evidência lexical forte em uma linha de prosa e fronteira explícita logo
+  após o corpo do abstract (por exemplo, `Keywords`, `Resumen` ou
+  `Introdução`). Um trecho ambíguo ou multilinha permanece inalterado e
+  sinalizado. Bibliografias **não são removidas**: há exemplos também na
+  classe sintética e o recorte automático mostrou risco de apagar prosa.
+  Os demais casos são apenas sinalizados. Não remove
   declaração de hipótese, citação interna, lista, título, Markdown, gíria
   ou erro gramatical.
 - **Sinalização de alta precisão:** `review` exige evidência mais forte:
@@ -125,6 +127,49 @@ inspecionarmos N1:
 ```bash
 sbatch --export=ALL,HORUS_NORMALIZE_STAGE=n2 scripts/slurm_normalize_corpus.sh
 ```
+
+Antes da N2 completa, rode a prévia revisada e a checagem dos hashes da N1
+verificada, em jobs separados:
+
+```bash
+export HORUS_N1_RUN_DIR='results/normalization/full-n1-115189'
+export HORUS_DIAGNOSTICS_DIR='results/normalization/diagnostics-115958'
+sbatch --export=ALL,HORUS_DIAGNOSTIC_MODE=preview scripts/slurm_normalization_diagnostics.sh
+sbatch --export=ALL scripts/slurm_verify_hash_repair.sh
+```
+
+A prévia exporta candidatos estratificados por classe; assim o rodapé
+sintético raro entra nos exemplos. A checagem de hashes compara os 424
+registros originalmente divergentes com **todos** os hashes originais
+recalculados e os hashes N1 derivados. `matching_hash_pairs.csv` separa
+duplicatas reais de uma eventual colisão SHA-256; nenhum hash do corpus
+original é alterado. Duplicatas identificadas não são um impedimento para
+recalcular hashes, mas requerem controle de leakage na seleção/splits.
+
+## Critério de parada da limpeza
+
+Congelar a N2 após uma prévia revisada e uma execução completa se:
+
+1. O verificador confirmar a mesma quantidade/ordem de registros,
+   identificadores, rótulos e metadados protegidos, texto/hash/contagens
+   coerentes e fonte original imutável.
+2. Todos os recortes de abstract propostos na prévia forem inspecionados;
+   nenhum pode conter prosa portuguesa, título, citação ou outra seção.
+   Recortes ambíguos devem ficar intactos, não ser corrigidos por tentativa.
+3. Todos os rodapés sintéticos e os rodapés humanos fora da fonte dominante
+   forem inspecionados, além de uma amostra determinística da fonte dominante;
+   nenhuma remoção de texto autoral pode ser observada. A amostra não prova
+   erro zero na população; seus limites devem constar no relatório.
+4. O auditor de hashes não encontrar o mesmo SHA-256 para textos diferentes.
+   Duplicatas exatas, caso existam, vão para o controle de leakage posterior.
+
+Atalhos residuais, bibliografias, textos ambíguos, discrepâncias de
+comprimento e idioma não reabrem indefinidamente a limpeza. Eles serão
+documentados e tratados na seleção, nos controles de confusão ou em análises
+de sensibilidade N1 × N2. A N2 não precisa reduzir toda diferença entre
+classes; o ganho deve ser avaliado sem sacrificar texto natural. Após
+congelamento, novas regras exigem evidência de dano sistemático e nova
+versão explícita, não ajustes silenciosos na mesma view.
 
 Nenhum desses comandos escolhe o benchmark ou treina detector. Um protocolo
 de seleção e seus splits deverão ser definidos depois, usando as views

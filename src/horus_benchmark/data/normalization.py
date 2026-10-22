@@ -34,6 +34,10 @@ MIXED_C3_MOJIBAKE = re.compile(r"Ă([\u0080-\u00bf])")
 ABSTRACT_START = re.compile(r"(?im)^[ \t]*abstract(?=[ \t]*:|[ \t]*$)[ \t]*:?[ \t]*[^\n]*")
 PORTUGUESE_RESUMO = re.compile(r"(?im)^[ \t]*resumos?[ \t]*:?[^\n]*")
 PORTUGUESE_INTRO = re.compile(r"(?im)^[ \t]*(?:1[.\s-]+)?introdução\b[^\n]*")
+ABSTRACT_NEXT_SECTION = re.compile(
+    r"(?i)^(?:(?:\d+[.\s-]+)?introdução|resumo|resumen|résumé|sumário)\b"
+)
+ENGLISH_KEYWORDS = re.compile(r"(?i)^(?:key[ -]?words?|index terms?)\s*:")
 REFERENCES = re.compile(r"(?im)^[ \t]*(?:referências(?: bibliográficas)?|bibliografia|references)[ \t]*$")
 PLACEHOLDER = re.compile(r"(?i)\[(?:insira|inserir|assinatura|seu nome|nome aqui)[^\]]{0,80}\]")
 PREAMBLE = re.compile(r"(?is)^\s*(?:aqui (?:está|esta|segue)|segue (?:abaixo|o texto)|claro[,!])\b.{0,100}[:\n]")
@@ -186,7 +190,11 @@ def _english_abstract(text: str, minimum_words: int) -> tuple[int, int] | None:
 
 
 def _parallel_abstract_span(text: str, minimum_words: int) -> tuple[int, int] | None:
-    """Require an English Abstract and explicit Portuguese section boundaries."""
+    """Cut only a one-paragraph English abstract with a visible next section.
+
+    Wrapped/multisection abstracts remain flagged, not shortened speculatively.
+    In particular, a distant Introduction is never used as the cut boundary.
+    """
 
     for heading in ABSTRACT_START.finditer(text):
         if heading.start() > len(text) // 4:
@@ -194,15 +202,35 @@ def _parallel_abstract_span(text: str, minimum_words: int) -> tuple[int, int] | 
         previous_resumo = PORTUGUESE_RESUMO.search(text[:heading.start()])
         next_resumo = PORTUGUESE_RESUMO.search(text, heading.end())
         next_intro = PORTUGUESE_INTRO.search(text, heading.end())
-        if previous_resumo and next_intro and next_intro.start() <= len(text) * 0.6:
-            end = next_intro.start()
-        elif not previous_resumo and next_resumo and next_intro and (
-            next_resumo.start() < next_intro.start() <= len(text) * 0.6
-        ):
-            end = next_resumo.start()
-        else:
+        if not next_intro or next_intro.start() > len(text) * 0.6:
             continue
-        if _english_evidence(text[heading.start():end], minimum_words):
+        if not previous_resumo and not (next_resumo and next_resumo.start() < next_intro.start()):
+            continue
+        # A single prose line is intentionally required. If the next line is
+        # not a recognized keyword line or section, the boundary is ambiguous.
+        lines = text[heading.start():next_intro.end()].splitlines(keepends=True)
+        if not lines:
+            continue
+        first = re.sub(r"(?i)^\s*abstract\s*:?\s*", "", lines[0]).strip()
+        body_index = 0 if _english_evidence(first, minimum_words) else 1
+        if body_index >= len(lines) or not _english_evidence(lines[body_index], minimum_words):
+            continue
+        index = body_index + 1
+        while index < len(lines) and not lines[index].strip():
+            index += 1
+        if (index < len(lines) and ENGLISH_KEYWORDS.match(lines[index].strip())
+                and len(lines[index].split()) <= 25):
+            index += 1
+            while index < len(lines) and not lines[index].strip():
+                index += 1
+        elif index < len(lines):
+            keywords = lines[index].strip()
+            if keywords.count(";") >= 2 and len(keywords.split()) <= 25:
+                index += 1
+                while index < len(lines) and not lines[index].strip():
+                    index += 1
+        if index < len(lines) and ABSTRACT_NEXT_SECTION.match(lines[index].strip()):
+            end = heading.start() + sum(len(line) for line in lines[:index])
             return heading.start(), end
     return None
 
