@@ -1,0 +1,66 @@
+batch_size: 256
+corpus_resource: corpus
+dataset_config: configs/datasets/horus_full.yaml
+experiment_id: human-theme-llm-full-v1
+full:
+  expected_corpus_rows: 195154
+  expected_human_rows: 97659
+  expected_wikipedia_rows: 5000
+  second_prompt_file: experiments/01_quality_audit/theme_agreement_600/configs/llm_second_pass_v1.yaml
+  shard_size: 1000
+  wikipedia_source_name: Corpus Carolina - Wikipédia
+  wikipedia_theme: Wikipédia
+llm:
+  batch_size: 1
+  chat_template_reserve_tokens: 512
+  gpu_memory_utilization: 0.9
+  input_policy: shared_token_budget
+  max_model_len: 65536
+  max_output_tokens: 1024
+  models:
+    gemma4_31b:
+      chat_template_kwargs:
+        enable_thinking: false
+      enforce_eager: true
+      hf_repo: google/gemma-4-31B-it
+      limit_mm_per_prompt:
+        audio: 0
+        image: 0
+        video: 0
+      revision: 842da3794eaa0b77d5f08bae87a17459d91ff475
+    gpt_oss_120b:
+      chat_template_kwargs:
+        reasoning_effort: low
+      enforce_eager: false
+      hf_repo: openai/gpt-oss-120b
+      revision: b5c939de8f754692c1647ca79fbf85e8c1e70f8a
+  temperature: 0.0
+manual_mapping: experiments/01_quality_audit/human_theme_validation/configs/manual_theme_map.csv
+model:
+  device: auto
+  epochs: 3
+  heldout_generator: null
+  inference_batch_size: 32
+  learning_rate: 2.0e-05
+  max_length: 512
+  name: neuralmind/bert-base-portuguese-cased
+  patience: 1
+  revision: 94d69c95f98f7d5b2a8700c420230ae10def0baa
+  train_batch_size: 16
+  weight_decay: 0.01
+output_root: results/theme_llm_full
+prompts: experiments/01_quality_audit/theme_agreement_600/configs/llm_prompts_v2.yaml
+sampling:
+  method: pilot_plus_uniform_without_replacement
+  pilot_per_area: 20
+  total_per_area: 100
+schema_version: 1
+seed: 2026
+taxonomy_resource: taxonomy
+test_resource: test
+threshold:
+  fixed_probability: 0.95
+  policy: fixed
+train_resource: train
+validation_resource: validation
+workspace_root: ../../../..
