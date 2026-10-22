@@ -183,8 +183,13 @@ def test_n2_stops_at_other_language_section_not_introduction() -> None:
         "Resumo\n" + "Pesquisa em português. " * 20 + "\n"
         "Abstract\n" + abstract + "\n"
         "Resumen\nEste texto apresenta resultados.\n"
-        "Introdução\n" + "O corpo permanece em português. " * 100
+        # Keep the abstract below the N2 substantial-loss threshold so this
+        # fixture tests the span boundary, not the independent loss guard.
+        "Introdução\n" + "O corpo permanece em português. " * 200
     )
+    edits = propose_n2_edits(text, RuleConfig(stage="n2"))
+    assert len(edits) == 1
+    assert text[edits[0].end:].startswith("Resumen")
     result = normalize_text(text, RuleConfig(stage="n2"))
     assert "Abstract" not in result.text
     assert "Resumen" in result.text
