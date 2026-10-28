@@ -1,0 +1,32 @@
+schema_version: 1
+seed: 20261028
+batch_size: 2048
+# Diagnostic sample, not benchmark selection. Same document IDs in all views.
+sample_per_label:
+  train: 3500
+  validation: 800
+  test: 800
+minimum_rows_per_label_split: 50
+minimum_subgroup_per_label: 20
+bootstrap_replicates: 500
+bootstrap_confidence: 0.95
+target_fpr: 0.01
+tfidf:
+  max_features: 100000
+  min_df: 3
+# Bins are based on raw document length, fixed across N1 and N2.
+raw_word_bins: [0, 150, 400, 800, 1800, 5000, 10000000]
+segments:
+  # Middle of the original, by character position. No edge fallback.
+  middle_start: 0.35
+  middle_end: 0.65
+  minimum_similarity: 0.92
+  minimum_margin: 0.03
+  paragraph:
+    min_words: 25
+    max_words: 350
+    max_fraction_of_document: 0.35
+  sentence:
+    min_words: 8
+    max_words: 80
+    max_fraction_of_document: 0.25
