@@ -58,7 +58,12 @@ def _sample_ids(raw: Path, limits: dict[str, int], seed: int) -> pd.DataFrame:
             group["sample_key"] = group["record_id"].map(
                 lambda rid: hashlib.sha256(f"{seed}|{rid}".encode()).hexdigest()
             )
-            selected.append(group.nsmallest(limits[split], "sample_key"))
+            # SHA-256 digests are strings: sort lexicographically, with record_id
+            # as a deterministic tie-breaker independent of Parquet row order.
+            selected.append(
+                group.sort_values(["sample_key", "record_id"], kind="stable")
+                .head(limits[split])
+            )
     return pd.concat(selected, ignore_index=True).drop(columns="sample_key")
 
 

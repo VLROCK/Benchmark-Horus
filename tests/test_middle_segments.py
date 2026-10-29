@@ -7,7 +7,7 @@ import pyarrow.parquet as pq
 import pytest
 
 from horus_benchmark.audit.compare_normalization_views import (
-    _fpr_threshold, _load_selected, paired_intervals,
+    _fpr_threshold, _load_selected, _sample_ids, paired_intervals,
 )
 from horus_benchmark.audit.middle_segments import align_segment, select_middle
 
@@ -79,3 +79,22 @@ def test_loading_selected_rejects_metadata_change(tmp_path) -> None:
     }])
     with pytest.raises(ValueError, match="Protected metadata"):
         _load_selected(path, expected, 128)
+
+
+def test_sample_ids_sorts_string_hashes_deterministically(tmp_path) -> None:
+    rows = [
+        {"record_id": f"{split}-{label}-{index}", "label": label,
+         "split": split, "broad_area": "academic"}
+        for split in ("train", "validation", "test")
+        for label in (0, 1)
+        for index in range(3)
+    ]
+    first = tmp_path / "first.parquet"
+    second = tmp_path / "second.parquet"
+    pq.write_table(pa.Table.from_pylist(rows), first)
+    pq.write_table(pa.Table.from_pylist(list(reversed(rows))), second)
+    limits = {"train": 1, "validation": 1, "test": 1}
+    selected_first = _sample_ids(first, limits, seed=7)
+    selected_second = _sample_ids(second, limits, seed=7)
+    assert selected_first["record_id"].tolist() == selected_second["record_id"].tolist()
+    assert len(selected_first) == 6
