@@ -19,15 +19,20 @@ export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
 
 stage="${HORUS_NORMALIZE_STAGE:-n1}"
 case "$stage" in
-  n1|n2) config="configs/experiments/corpus_normalization_${stage}.yaml" ;;
-  *) echo "HORUS_NORMALIZE_STAGE must be n1 or n2" >&2; exit 2 ;;
+  n1|n2|n3) config="configs/experiments/corpus_normalization_${stage}.yaml" ;;
+  *) echo "HORUS_NORMALIZE_STAGE must be n1, n2, or n3" >&2; exit 2 ;;
 esac
 output="${HORUS_NORMALIZE_OUTPUT:-results/normalization/full-${stage}-${SLURM_JOB_ID:?}}"
 test ! -e "$output"
 "$python_bin" -m horus_benchmark.data.normalize_corpus --config "$config" --output-dir "$output"
 "$python_bin" -m horus_benchmark.data.verify_normalization --config "$config" --run-dir "$output"
 "$python_bin" -m horus_benchmark.data.normalization_report --run-dir "$output"
-"$python_bin" -m horus_benchmark.data.normalization_review --config "$config" --run-dir "$output"
+review_args=()
+if [[ "$stage" == "n3" ]]; then
+  review_args=(--per-cell 4 --maximum 720)
+fi
+"$python_bin" -m horus_benchmark.data.normalization_review \
+  --config "$config" --run-dir "$output" "${review_args[@]}"
 "$python_bin" -m horus_benchmark.data.prepare_normalized_audit \
   --normalization-config "$config" --run-dir "$output" \
   --base-audit-config configs/experiments/quality_audit_full.yaml

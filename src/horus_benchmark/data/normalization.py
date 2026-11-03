@@ -46,6 +46,15 @@ FOOTER = re.compile(
     r"atualizado em:\s*[^\n]{4,90}|one reply to\s+[^\n]{1,120})\s*$"
 )
 MARKDOWN = re.compile(r"(?m)^\s{0,3}(?:#{1,6}\s|[-*+]\s|\d+[.)]\s)|\*\*|```|~~~")
+FENCE_LINE = re.compile(r"^[ \t]{0,3}(`{3,}|~{3,})([^\n]*)$")
+MD_LINK = re.compile(r"\[([^\]\n]{1,500})\]\(([^)\n]{1,1000})\)")
+MD_INLINE_CODE = re.compile(r"(?<!`)`([^`\n]+)`(?!`)")
+MD_HEADING = re.compile(r"^[ \t]{0,3}#{1,6}[ \t]+(?=\S)")
+# Numbered sections are common in legal and academic prose, so their numbers
+# are preserved even when they resemble Markdown list markers.
+MD_BULLET = re.compile(r"^[ \t]*[-*+][ \t]+(?=\S)")
+MD_STRONG = re.compile(r"(?<!\w)(?:\*\*([^*\n]+)\*\*|__([^_\n]+)__)(?!\w)")
+MD_EMPHASIS = re.compile(r"(?<!\w)(?:\*([^*\n]+)\*|_([^_\n]+)_)(?!\w)")
 LITERAL_ESCAPE = re.compile(r"\\[nrt]")
 ENGLISH_MARKERS = frozenset(
     "the of and to in for with this that from are was were have has as we our "
@@ -59,6 +68,7 @@ WORD = re.compile(r"[^\W\d_]+", re.UNICODE)
 TEXT_REVIEW_FLAGS = frozenset({
     "ENGLISH_ABSTRACT_CANDIDATE", "ENCODING_REMAINS", "HTML_DENSE_REMAINS",
     "SUBSTANTIAL_LOSS", "EMPTY_AFTER", "N2_GUARD_RETAINED",
+    "N3_GUARD_RETAINED", "N3_UNCLOSED_FENCE",
 })
 
 
@@ -76,10 +86,14 @@ class RuleConfig:
     guard_min_retained_fraction: float = 0.90
     min_english_abstract_words: int = 40
     min_html_residual_tags_for_review: int = 3
+    neutralize_markdown: bool = False
+    remove_explicit_placeholders: bool = False
 
     def __post_init__(self) -> None:
-        if self.stage not in {"n1", "n2"}:
-            raise ValueError("stage must be n1 or n2")
+        if self.stage not in {"n1", "n2", "n3"}:
+            raise ValueError("stage must be n1, n2, or n3")
+        if self.stage != "n3" and (self.neutralize_markdown or self.remove_explicit_placeholders):
+            raise ValueError("Presentation cleanup requires stage=n3")
         if not 0 <= self.guard_min_retained_fraction <= 1:
             raise ValueError("guard_min_retained_fraction must be in [0, 1]")
         if min(self.guard_min_original_words, self.guard_min_lost_words) < 0:
@@ -261,8 +275,8 @@ def _terminal_references_start(text: str) -> int | None:
 def propose_n2_edits(text: str, config: RuleConfig) -> tuple[N2Edit, ...]:
     """Locate auditable N2 cuts without using label, source, or split metadata."""
 
-    if config.stage != "n2":
-        raise ValueError("N2 proposals require a stage=n2 configuration")
+    if config.stage not in {"n2", "n3"}:
+        raise ValueError("N2 proposals require a stage=n2 or n3 configuration")
     candidates: list[N2Edit] = []
     if config.remove_bounded_parallel_abstracts:
         span = _parallel_abstract_span(text, config.min_english_abstract_words)
@@ -304,6 +318,89 @@ def n2_loss_guard(before: str, after: str, config: RuleConfig) -> bool:
     """Veto a substantial N2-only loss; N1's existing changes are unaffected."""
 
     original_words, retained_words = len(before.split()), len(after.split())
+    return (
+        original_words >= config.guard_min_original_words
+        and original_words - retained_words >= config.guard_min_lost_words
+        and retained_words / original_words < config.guard_min_retained_fraction
+    )
+
+
+def _n3_presentation_cleanup(text: str, config: RuleConfig) -> tuple[str, Counter[str], set[str]]:
+    """Remove only explicit presentation syntax; keep prose and code content.
+
+    Fenced code bodies are copied verbatim. An unclosed fence is retained and
+    flagged rather than guessing where prose resumes. Inline code content is
+    protected while prose on the same line is cleaned.
+    """
+
+    operations: Counter[str] = Counter()
+    flags: set[str] = set()
+    # HTML/CSS examples may contain Markdown and placeholder-looking literals.
+    # Retain the whole record when their boundaries cannot be safely isolated.
+    if re.search(r"<\s*(?:pre|code)\b", text, re.I):
+        flags.add("N3_HTML_CODE_RETAINED")
+        return text, operations, flags
+    lines = text.splitlines(keepends=True)
+    output: list[str] = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        bare = line.rstrip("\n")
+        opening = FENCE_LINE.fullmatch(bare) if config.neutralize_markdown else None
+        if opening:
+            marker = opening.group(1)
+            closing = next((end for end in range(index + 1, len(lines))
+                            if (candidate := FENCE_LINE.fullmatch(lines[end].rstrip("\n")))
+                            and candidate.group(1)[0] == marker[0]
+                            and len(candidate.group(1)) >= len(marker)
+                            and not candidate.group(2).strip()), None)
+            if closing is None:
+                flags.add("N3_UNCLOSED_FENCE")
+                output.extend(lines[index:])
+                break
+            output.extend(lines[index + 1:closing])
+            operations["MARKDOWN_FENCE"] += 2
+            index = closing + 1
+            continue
+
+        newline = "\n" if line.endswith("\n") else ""
+        prose = bare
+        protected: list[str] = []
+        if config.neutralize_markdown:
+            def protect_code(match: re.Match[str]) -> str:
+                protected.append(match.group(1))
+                operations["MARKDOWN_INLINE_CODE"] += 1
+                return f"\x00HORUS_CODE_{len(protected) - 1}\x00"
+
+            prose = MD_INLINE_CODE.sub(protect_code, prose)
+            prose = _replace(MD_LINK, prose, lambda match: match.group(1), operations,
+                             "MARKDOWN_LINK")
+            prose = _replace(MD_STRONG, prose, lambda match: match.group(1) or match.group(2),
+                             operations, "MARKDOWN_EMPHASIS")
+            prose = _replace(MD_EMPHASIS, prose, lambda match: match.group(1) or match.group(2),
+                             operations, "MARKDOWN_EMPHASIS")
+            prose = _replace(MD_HEADING, prose, "", operations, "MARKDOWN_HEADING")
+            prose = _replace(MD_BULLET, prose, "", operations, "MARKDOWN_BULLET")
+        if config.remove_explicit_placeholders:
+            prose = _replace(PLACEHOLDER, prose, "", operations, "PLACEHOLDER_REMOVE")
+        prose = _replace(SPACE_RUN, prose, " ", operations, "N3_SPACE_RUN")
+        for code_index, code in enumerate(protected):
+            prose = prose.replace(f"\x00HORUS_CODE_{code_index}\x00", code)
+        output.append(prose + newline)
+        index += 1
+    result = "".join(output)
+    # Keep the established whitespace policy without changing paragraph breaks.
+    result = TRAILING_SPACE.sub("", result).strip()
+    return result, operations, flags
+
+
+def _n3_loss_guard(before: str, after: str, config: RuleConfig) -> bool:
+    """Count lexical words, so removal of list glyphs does not mimic content loss."""
+
+    if before and not after:
+        return True
+    original_words = len(WORD.findall(before))
+    retained_words = len(WORD.findall(after))
     return (
         original_words >= config.guard_min_original_words
         and original_words - retained_words >= config.guard_min_lost_words
@@ -389,7 +486,7 @@ def normalize_text(content: str, config: RuleConfig) -> NormalizedText:
         operations["EDGE_SPACE"] += 1
         text = trimmed
 
-    if config.stage == "n2":
+    if config.stage in {"n2", "n3"}:
         edits = propose_n2_edits(text, config)
         if edits:
             proposed = apply_n2_edits(text, edits)
@@ -401,6 +498,21 @@ def normalize_text(content: str, config: RuleConfig) -> NormalizedText:
                     operations[edit.kind] += edit.count
     elif FOOTER.search(text):
         flags.add("EDITORIAL_FOOTER")
+
+    if config.stage == "n3":
+        presented, presentation_operations, presentation_flags = _n3_presentation_cleanup(text, config)
+        flags.update(presentation_flags)
+        if _n3_loss_guard(text, presented, config):
+            flags.add("N3_GUARD_RETAINED")
+        else:
+            if presented != text:
+                flags.add("N3_CHANGED")
+            if any(name.startswith("MARKDOWN_") for name in presentation_operations):
+                flags.add("N3_MARKDOWN_CHANGED")
+            if presentation_operations["PLACEHOLDER_REMOVE"]:
+                flags.add("N3_PLACEHOLDER_CHANGED")
+            text = presented
+            operations.update(presentation_operations)
 
     # Remaining structural issues are detection-only until segment boundaries
     # have been validated. No model rewrites the content.

@@ -81,6 +81,60 @@ def test_code_example_is_protected_from_html_and_contact_rewrites() -> None:
     assert result.status == "ok"
 
 
+def test_n3_removes_markdown_syntax_and_explicit_placeholders_only() -> None:
+    text = (
+        "# Guia\n\n- **Primeiro** item\n2. [Segundo](https://example.org) item\n"
+        "Escreva [Seu Nome] no formulário.\nA hipótese permanece hipotética."
+    )
+    n2 = normalize_text(text, RuleConfig(stage="n2"))
+    n3 = normalize_text(text, RuleConfig(
+        stage="n3", neutralize_markdown=True, remove_explicit_placeholders=True,
+    ))
+    assert "# Guia" in n2.text and "[Seu Nome]" in n2.text
+    assert n3.text == (
+        "Guia\n\nPrimeiro item\n2. Segundo item\n"
+        "Escreva no formulário.\nA hipótese permanece hipotética."
+    )
+    assert "N3_MARKDOWN_CHANGED" in n3.flags
+    assert "N3_PLACEHOLDER_CHANGED" in n3.flags
+    assert n3.operations["MARKDOWN_BULLET"] == 1
+    assert n3.operations["PLACEHOLDER_REMOVE"] == 1
+
+
+def test_n3_preserves_fenced_code_body_and_inline_code() -> None:
+    text = (
+        "# Tutorial\n```python\n# comentário\n- não é lista\n[Seu Nome]\n```\n"
+        "Use `**literal**` e **texto**."
+    )
+    result = normalize_text(text, RuleConfig(
+        stage="n3", neutralize_markdown=True, remove_explicit_placeholders=True,
+    ))
+    assert result.text == (
+        "Tutorial\n# comentário\n- não é lista\n[Seu Nome]\n"
+        "Use **literal** e texto."
+    )
+    assert result.operations["MARKDOWN_FENCE"] == 2
+
+
+def test_n3_retains_unclosed_fence_and_html_code_example() -> None:
+    rules = RuleConfig(stage="n3", neutralize_markdown=True,
+                       remove_explicit_placeholders=True)
+    unclosed = normalize_text("# Título\n```html\n- [Seu Nome]", rules)
+    assert "```html\n- [Seu Nome]" in unclosed.text
+    assert "N3_UNCLOSED_FENCE" in unclosed.flags
+    assert unclosed.status == "review"
+    html_code = normalize_text("<pre>- [Seu Nome]</pre>\n# Título", rules)
+    assert html_code.text == "<pre>- [Seu Nome]</pre>\n# Título"
+    assert "N3_HTML_CODE_RETAINED" in html_code.flags
+
+
+def test_n3_without_new_rules_is_identical_to_n2() -> None:
+    text = "# Título\n- [Seu Nome]\nCopyright © 2011 Editora. Todos os direitos reservados."
+    assert normalize_text(text, RuleConfig(stage="n3")).text == normalize_text(
+        text, RuleConfig(stage="n2")
+    ).text
+
+
 def test_contact_mask_keeps_sentence_punctuation() -> None:
     result = normalize_text("Leia https://example.org. Escreva a@b.com!", RuleConfig())
     assert result.text == "Leia URL. Escreva EMAIL!"

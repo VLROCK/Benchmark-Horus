@@ -15,9 +15,18 @@ python_bin="${HORUS_NORMALIZE_PYTHON:-$HOME/miniconda3/envs/horus_theme/bin/pyth
 test -x "$python_bin"
 export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-16}"
+args=(
+  --config configs/experiments/compare_normalization_views.yaml
+  --raw dataset_final_completo/data/all.parquet
+  --n1-run "${HORUS_N1_RUN:-results/normalization/full-n1-115189}"
+  --n2-run "${HORUS_N2_RUN:-results/normalization/full-n2-116035}"
+)
+if [[ -n "${HORUS_N3_RUN:-}" ]]; then
+  test -s "$HORUS_N3_RUN/verification.json"
+  args+=(--n3-run "$HORUS_N3_RUN")
+  output="results/audits/normalization-view-probes-n3-${SLURM_JOB_ID:?}"
+else
+  output="results/audits/normalization-view-probes-${SLURM_JOB_ID:?}"
+fi
 "$python_bin" -m horus_benchmark.audit.compare_normalization_views \
-  --config configs/experiments/compare_normalization_views.yaml \
-  --raw dataset_final_completo/data/all.parquet \
-  --n1-run results/normalization/full-n1-115189 \
-  --n2-run results/normalization/full-n2-116035 \
-  --output "results/audits/normalization-view-probes-${SLURM_JOB_ID:?}"
+  "${args[@]}" --output "$output"

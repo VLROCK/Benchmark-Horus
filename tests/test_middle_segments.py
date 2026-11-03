@@ -61,6 +61,17 @@ def test_paired_bootstrap_zero_delta_for_identical_predictions() -> None:
     assert (result["delta_ci_high"] == 0).all()
 
 
+def test_paired_bootstrap_includes_n2_to_n3_on_identical_ids() -> None:
+    y = np.array([0, 0, 0, 1, 1, 1])
+    scores = np.array([0.1, 0.2, 0.3, 0.7, 0.8, 0.9])
+    views = ("raw", "n1", "n2", "n3")
+    result = paired_intervals(y, {view: scores for view in views},
+                              {view: (0.5, 0.3) for view in views},
+                              replicates=10, confidence=0.95, seed=7, views=views)
+    assert ((result["before"] == "n2") & (result["after"] == "n3")).sum() == 4
+    assert (result["delta_ci_low"] == 0).all()
+
+
 def test_fpr_threshold_is_selected_on_validation_negatives_only() -> None:
     y = np.array([0] * 100 + [1] * 100)
     scores = np.concatenate((np.arange(100) / 100, np.ones(100)))

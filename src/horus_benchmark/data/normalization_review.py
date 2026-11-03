@@ -24,18 +24,21 @@ def export_review(
 ) -> Path:
     if per_cell < 1 or maximum < 1:
         raise ValueError("per_cell and maximum must be positive")
-    _, catalog, _, _ = _config(config_path)
+    _, catalog, rules, _ = _config(config_path)
     run_dir = run_dir.expanduser().resolve()
-    cells: dict[tuple[str, str], list[tuple[str, str]]] = defaultdict(list)
+    cells: dict[tuple[str, str, str], list[tuple[str, str]]] = defaultdict(list)
     for row in _rows(run_dir / "normalization_trace.parquet"):
         codes = row["normalization_flags"].split(";") if row["normalization_flags"] else ["UNFLAGGED_CONTROL"]
         for code in codes:
             if not code:
                 continue
-            key = (row["broad_area"], code)
+            # For the N3 trial, inspect changed human and synthetic texts in
+            # each area while keeping labels out of the blind examples.
+            label_cell = row["label_name"] if rules.stage == "n3" and code.startswith("N3_") else "both"
+            key = (row["broad_area"], code, label_cell)
             cells[key].append((_priority(seed, code, row["record_id"]), row["record_id"]))
     chosen: dict[str, set[str]] = defaultdict(set)
-    for (_, code), candidates in sorted(cells.items()):
+    for (_, code, _), candidates in sorted(cells.items()):
         for _, record_id in sorted(candidates)[:per_cell]:
             chosen[record_id].add(code)
     if len(chosen) > maximum:

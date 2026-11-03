@@ -1,4 +1,4 @@
-"""Paired exploratory shortcut probes for raw, N1 and N2 corpus views.
+"""Paired exploratory shortcut probes for raw, N1, N2 and optional N3 views.
 
 The inherited splits are not certified leakage-free. This pipeline does not
 select benchmark rows, train final detectors, or evaluate OOD generalization.
@@ -35,9 +35,14 @@ from horus_benchmark.data.freeze_normalization import check as check_freeze
 from horus_benchmark.data.normalize_corpus import sha256_file
 
 
-VIEWS = ("raw", "n1", "n2")
+BASE_VIEWS = ("raw", "n1", "n2")
 SPLITS = ("train", "validation", "test")
 KINDS = ("document", "paragraph", "sentence")
+PRESENTATION_MEASURES = (
+    "markdown_bullet", "markdown_heading", "markdown_code_fence",
+    "html_tag", "char_count_audit", "word_count_audit",
+    "punctuation_per_100_words",
+)
 
 
 def _sample_ids(raw: Path, limits: dict[str, int], seed: int) -> pd.DataFrame:
@@ -91,15 +96,36 @@ def _load_selected(path: Path, expected: pd.DataFrame, batch_size: int) -> dict[
     return contents
 
 
+def _compare_full_corpus_surfaces(n2: Path, n3: Path, output: Path) -> None:
+    """Compare identical label/area cells using the full derived corpora."""
+
+    keys = ["label_name", "broad_area"]
+    before = pd.read_csv(n2 / "paired_surface_summary.csv").set_index(keys)
+    after = pd.read_csv(n3 / "paired_surface_summary.csv").set_index(keys)
+    if not before.index.is_unique or not after.index.is_unique or not before.index.equals(after.index):
+        raise ValueError("N2/N3 label-area cells differ")
+    if not before["rows"].equals(after["rows"]):
+        raise ValueError("N2/N3 label-area row counts differ")
+    rows = []
+    for key in before.index:
+        for measure in PRESENTATION_MEASURES:
+            column = f"after_{measure}"
+            old, new = float(before.loc[key, column]), float(after.loc[key, column])
+            rows.append({"label_name": key[0], "broad_area": key[1],
+                         "rows": int(before.loc[key, "rows"]), "measure": measure,
+                         "n2": old, "n3": new, "n3_minus_n2": new - old})
+    pd.DataFrame(rows).to_csv(output / "n2_n3_full_corpus_surfaces.csv", index=False)
+
+
 def _segment_triplets(
     sample: pd.DataFrame, texts: dict[str, dict[str, str]], kind: str,
-    segment_config: dict, seed: int,
+    segment_config: dict, seed: int, views: tuple[str, ...],
 ) -> tuple[pd.DataFrame, dict[str, dict[str, str]], pd.DataFrame]:
     if kind == "document":
         raise ValueError("Documents are compared directly, without segment alignment")
     bounds = segment_config[kind]
     rows = []
-    selected = {view: {} for view in VIEWS}
+    selected = {view: {} for view in views}
     for meta in sample.itertuples(index=False):
         rid = meta.record_id
         raw = select_middle(
@@ -115,7 +141,7 @@ def _segment_triplets(
                "raw_status": "selected" if raw else "no_middle_unit",
                "raw_midpoint": raw.midpoint if raw else np.nan}
         aligned = {}
-        for view in ("n1", "n2"):
+        for view in views[1:]:
             if raw is None:
                 row[f"{view}_status"] = "not_attempted"
                 row[f"{view}_similarity"] = np.nan
@@ -129,11 +155,11 @@ def _segment_triplets(
             row[f"{view}_similarity"] = similarity
             if unit is not None:
                 aligned[view] = unit.text
-        row["paired_eligible"] = raw is not None and len(aligned) == 2
+        row["paired_eligible"] = raw is not None and len(aligned) == len(views) - 1
         if row["paired_eligible"]:
             selected["raw"][rid] = raw.text
-            selected["n1"][rid] = aligned["n1"]
-            selected["n2"][rid] = aligned["n2"]
+            for view in views[1:]:
+                selected[view][rid] = aligned[view]
         rows.append(row)
     coverage = pd.DataFrame(rows)
     return sample.loc[sample["record_id"].isin(selected["raw"])].copy(), selected, coverage
@@ -161,6 +187,7 @@ def _metrics(y: np.ndarray, scores: np.ndarray, threshold: float,
 def paired_intervals(
     y: np.ndarray, predictions: dict[str, np.ndarray], thresholds: dict[str, tuple[float, float]],
     *, replicates: int, confidence: float, seed: int,
+    views: tuple[str, ...] = BASE_VIEWS,
 ) -> pd.DataFrame:
     """Stratified paired bootstrap: resample the same test IDs in every view."""
 
@@ -174,14 +201,17 @@ def paired_intervals(
     for _ in range(replicates):
         take = np.concatenate([rng.choice(indices[label], len(indices[label]), replace=True)
                                for label in (0, 1)])
-        for view in VIEWS:
+        for view in views:
             values = _metrics(y[take], predictions[view][take], *thresholds[view])
             for metric, value in values.items():
                 draws.setdefault((view, metric), []).append(value)
     alpha = (1 - confidence) / 2
     rows = []
     for metric in ("roc_auc", "balanced_accuracy", "tpr_at_fixed_fpr", "observed_fpr"):
-        for before, after in (("raw", "n1"), ("n1", "n2"), ("raw", "n2")):
+        pairs = list(zip(views[:-1], views[1:])) + [("raw", views[-1])]
+        if len(views) > 3:
+            pairs.append(("raw", "n2"))
+        for before, after in dict.fromkeys(pairs):
             first = np.asarray(draws[before, metric])
             second = np.asarray(draws[after, metric])
             delta = second - first
@@ -246,32 +276,42 @@ def _fit_probe(
     return val_scores, test_scores, y, top_features
 
 
-def run(config_path: Path, raw: Path, n1: Path, n2: Path, output: Path) -> Path:
+def run(config_path: Path, raw: Path, n1: Path, n2: Path, output: Path,
+        n3: Path | None = None) -> Path:
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     if config.get("schema_version") != 1:
         raise ValueError("Expected schema_version: 1")
     raw, n1, n2, output = (path.expanduser().resolve() for path in (raw, n1, n2, output))
+    n3 = n3.expanduser().resolve() if n3 is not None else None
+    views = (*BASE_VIEWS, "n3") if n3 is not None else BASE_VIEWS
     if output.exists():
         raise FileExistsError(f"Output path must be new: {output}")
     check_freeze(n2)
     manifests = {}
-    for stage, path in (("n1", n1), ("n2", n2)):
+    view_runs = {"n1": n1, "n2": n2}
+    if n3 is not None:
+        view_runs["n3"] = n3
+    for stage, path in view_runs.items():
         verification = json.loads((path / "verification.json").read_text(encoding="utf-8"))
         if not verification.get("verified") or verification.get("stage") != stage:
             raise ValueError(f"{stage} is not verified")
         manifests[stage] = verification
     raw_sha = sha256_file(raw)
     if any(item["source_sha256"] != raw_sha for item in manifests.values()):
-        raise ValueError("Raw source hash differs from N1/N2 verification")
+        raise ValueError("Raw source hash differs from normalized view verification")
     raw_rows = ds.dataset(str(raw), format="parquet").count_rows()
     if any(item["rows"] != raw_rows for item in manifests.values()):
-        raise ValueError("N1/N2 verified row counts differ from the raw corpus")
+        raise ValueError("Verified view row counts differ from the raw corpus")
     sample = _sample_ids(raw, config["sample_per_label"], int(config["seed"]))
     paths = {"raw": raw, "n1": n1 / "normalized_corpus.parquet",
              "n2": n2 / "normalized_corpus.parquet"}
+    if n3 is not None:
+        paths["n3"] = n3 / "normalized_corpus.parquet"
     texts = {view: _load_selected(path, sample, int(config["batch_size"]))
              for view, path in paths.items()}
     output.mkdir(parents=True)
+    if n3 is not None:
+        _compare_full_corpus_surfaces(n2, n3, output)
     sample.to_csv(output / "sampled_documents.csv", index=False)
     results = []
     intervals = []
@@ -286,10 +326,10 @@ def run(config_path: Path, raw: Path, n1: Path, n2: Path, output: Path) -> Path:
             eligible, selected = sample.copy(), texts
         else:
             eligible, selected, coverage = _segment_triplets(
-                sample, texts, kind, config["segments"], int(config["seed"]))
+                sample, texts, kind, config["segments"], int(config["seed"]), views)
             coverage.to_csv(output / f"{kind}_alignment.csv", index=False)
             paired_counts[kind] = len(eligible)
-            summary = coverage.groupby(["split", "label", "raw_status", "n1_status", "n2_status"],
+            summary = coverage.groupby(["split", "label", *(f"{view}_status" for view in views)],
                                        dropna=False).size().reset_index(name="rows")
             summary.insert(0, "kind", kind)
             coverage_summaries.append(summary)
@@ -308,7 +348,7 @@ def run(config_path: Path, raw: Path, n1: Path, n2: Path, output: Path) -> Path:
             scores = {}
             thresholds = {}
             label_arrays = None
-            for view in VIEWS:
+            for view in views:
                 val, test, labels, top = _fit_probe(
                     eligible, selected[view], view, kind, probe,
                     config["tfidf"], int(config["seed"])
@@ -331,7 +371,7 @@ def run(config_path: Path, raw: Path, n1: Path, n2: Path, output: Path) -> Path:
                                 "validation_fixed_fpr_threshold": low_fpr,
                                 **values})
             test_meta = eligible.loc[eligible["split"] == "test"].reset_index(drop=True)
-            for view in VIEWS:
+            for view in views:
                 predictions.extend({"kind": kind, "probe": probe, "view": view,
                                     "record_id": rid, "label": label, "score": float(score)}
                                    for rid, label, score in zip(test_meta["record_id"],
@@ -339,7 +379,7 @@ def run(config_path: Path, raw: Path, n1: Path, n2: Path, output: Path) -> Path:
             ci = paired_intervals(label_arrays["test"], scores, thresholds,
                                   replicates=int(config["bootstrap_replicates"]),
                                   confidence=float(config["bootstrap_confidence"]),
-                                  seed=int(config["seed"]))
+                                  seed=int(config["seed"]), views=views)
             ci.insert(0, "probe", probe)
             ci.insert(0, "kind", kind)
             intervals.append(ci)
@@ -354,7 +394,7 @@ def run(config_path: Path, raw: Path, n1: Path, n2: Path, output: Path) -> Path:
                     y_group = label_arrays["test"][mask]
                     if min((y_group == 0).sum(), (y_group == 1).sum()) < int(config["minimum_subgroup_per_label"]):
                         continue
-                    for view in VIEWS:
+                    for view in views:
                         values = _metrics(y_group, scores[view][mask], *thresholds[view])
                         subgroup.append({"kind": kind, "probe": probe, "view": view,
                                          "grouping": grouping, "group": str(group),
@@ -373,8 +413,8 @@ def run(config_path: Path, raw: Path, n1: Path, n2: Path, output: Path) -> Path:
         for (kind, probe), group in metrics.groupby(["kind", "probe"]):
             if probe not in {"word_1_2gram", "char_4gram", "all_surface"}:
                 continue
-            ordered = group.set_index("view").loc[list(VIEWS)]
-            ax.plot(list(VIEWS), ordered[metric], marker="o", label=f"{kind}: {probe}")
+            ordered = group.set_index("view").loc[list(views)]
+            ax.plot(list(views), ordered[metric], marker="o", label=f"{kind}: {probe}")
         ax.set_title(metric)
         ax.set_ylim(0, 1)
     axes[1].legend(fontsize=7, bbox_to_anchor=(1.05, 1), loc="upper left")
@@ -383,8 +423,10 @@ def run(config_path: Path, raw: Path, n1: Path, n2: Path, output: Path) -> Path:
     (output / "provenance.json").write_text(json.dumps({
         "raw_path": str(raw), "raw_sha256": raw_sha,
         "n1_run": str(n1), "n2_run": str(n2),
+        "n3_run": str(n3) if n3 is not None else None,
         "n1_corpus_sha256": sha256_file(paths["n1"]),
         "n2_corpus_sha256": sha256_file(paths["n2"]),
+        "n3_corpus_sha256": sha256_file(paths["n3"]) if n3 is not None else None,
         "n2_freeze_sha256": sha256_file(n2 / "freeze_manifest.json"),
         "config_path": str(config_path.resolve()), "config_sha256": sha256_file(config_path),
         "runner_sha256": sha256_file(Path(__file__)),
@@ -396,7 +438,7 @@ def run(config_path: Path, raw: Path, n1: Path, n2: Path, output: Path) -> Path:
         "skipped_granularities": skipped,
     }, indent=2), encoding="utf-8")
     (output / "README.md").write_text(
-        "# Comparação exploratória raw → N1 → N2\n\n"
+        "# Comparação exploratória " + " → ".join(views) + "\n\n"
         "Modelos separados por view, mesmos IDs e rótulos em cada granularidade. "
         "Vocabulário e scaler ajustados somente no treino; thresholds somente na validação. "
         "Frase significa sentença completa; parágrafo significa bloco separado por linha em branco. "
@@ -417,9 +459,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--raw", type=Path, required=True)
     parser.add_argument("--n1-run", type=Path, required=True)
     parser.add_argument("--n2-run", type=Path, required=True)
+    parser.add_argument("--n3-run", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
-    print(run(args.config, args.raw, args.n1_run, args.n2_run, args.output))
+    print(run(args.config, args.raw, args.n1_run, args.n2_run, args.output, args.n3_run))
     return 0
 
 
