@@ -1,0 +1,30 @@
+experiment_id: n2-lineage-selection-candidates-v1
+# Cenários exploratórios; nenhum é critério final até inspeção dos resultados.
+log2_bin_widths: [0.25, 0.5, 1.0]
+seeds: [20261103, 20261104, 20261105]
+reference_width: 0.25
+reference_seed: 20261103
+
+# Alta precisão: flags técnicas severas. As flags de idioma nos metadados,
+# truncamento anterior, hash de origem e abstract candidato são diagnósticas.
+hold_flags:
+  - EMPTY_AFTER
+  - ENCODING_REMAINS
+  - HTML_DENSE_REMAINS
+  - SUBSTANTIAL_LOSS
+  - N2_GUARD_RETAINED
+n3_diagnostic_flags: [SUBSTANTIAL_LOSS, N3_UNCLOSED_FENCE, N3_GUARD_RETAINED]
+
+# Similaridade global; pares encontrados apenas por contenção ficam pendentes.
+min_global_jaccard: 0.90
+max_metadata_group_size: 20
+
+# Gates de cobertura exploratórios; falhas são apenas relatadas.
+material_provenance_min_rows: 500
+min_retained_per_material_provenance: 100
+
+probe_train_fraction: 0.70
+probe_validation_fraction: 0.15
+probe_test_fraction: 0.15
+format_examples_per_cell: 3
+sample_seed: 20261104
