@@ -1,13 +1,15 @@
 # Diagnóstico de seleção a partir de N2 e N3
 
 Este experimento é somente diagnóstico. Ele lê os Parquets verificados da N2
-e N3, mede suporte comum e sondas superficiais, e simula três políticas de
-seleção. Não altera nem publica um benchmark selecionado.
+e da **nova N3s** (apresentação corrigida só nos sintéticos), mede suporte
+comum e sondas superficiais, e simula três políticas de seleção. Não altera
+nem publica um benchmark selecionado.
 
-As views são `n2`, `n3` (limpeza simétrica já executada) e
-`n3_synthetic_only` (simulação virtual: humano N2 + sintético N3). Esta última
-permite medir a hipótese de neutralizar a apresentação apenas no sintético,
-sem modificar novamente o corpus nem confundir a N3 existente com outra view.
+As views são `n2` e `n3` (a nova execução N3s). A N3 antiga foi simétrica;
+permanece arquivada, mas é rejeitada pelo código deste diagnóstico. A N3s
+deriva novamente do corpus original: humanos passam pelas regras N2 e
+sintéticos passam também pela neutralização de Markdown e placeholders.
+O diagnóstico exige que todo texto humano N3s seja idêntico ao N2.
 
 Os cenários são:
 
@@ -22,6 +24,8 @@ exploratórios em `configs/experiments/selection_diagnostics_n2_n3.yaml`;
 não são critérios aprovados. A seleção usa apenas área e comprimento.
 Fonte, gerador, pontuação, apresentação, tema, gênero, split antigo e status
 de revisão são medidos depois, não usados para escolher linhas.
+O diagnóstico separa marcadores de lista não numerada (`-`, `*`, `+`) de
+listas numeradas. O indicador antigo `markdown_bullet` mistura ambos.
 
 As sondas usam Logistic Regression para comprimento, apresentação, pontuação
 e comprimento+apresentação. Seus splits exploratórios são por
@@ -41,11 +45,24 @@ cd /home/victor.roquetto/Benchmark-Horus
 git pull
 PY="$HOME/miniconda3/envs/horus_theme/bin/python"
 "$PY" -m pip install -e '.[audit,dev]'
-"$PY" -m pytest -q tests/test_selection_diagnostics.py
+"$PY" -m pytest -q tests/test_normalization.py tests/test_selection_diagnostics.py
 test -s results/normalization/full-n2-116035/normalized_corpus.parquet
-test -s results/normalization/full-n3-125850/normalized_corpus.parquet
 mkdir -p results/logs
-JOB_ID=$(sbatch --parsable scripts/slurm_selection_diagnostics.sh)
+N3S_JOB=$(sbatch --parsable --export=ALL,HORUS_NORMALIZE_STAGE=n3s scripts/slurm_normalize_corpus.sh)
+N3S_JOB="${N3S_JOB%%;*}"
+echo "N3S_JOB=$N3S_JOB"
+```
+
+Após a N3s concluir com `COMPLETED 0:0`:
+
+```bash
+sacct -j "$N3S_JOB" --format=JobID,JobName%24,State,ExitCode,Elapsed
+N3S_RUN="results/normalization/full-n3s-${N3S_JOB}"
+cat "$N3S_RUN/verification.json"
+cat "$N3S_RUN/class_specific_verification.json"
+cat "$N3S_RUN/summary.json"
+test -s "$N3S_RUN/operation_counts_by_label_area.csv"
+JOB_ID=$(sbatch --parsable --export="ALL,HORUS_N3_RUN=$N3S_RUN" scripts/slurm_selection_diagnostics.sh)
 JOB_ID="${JOB_ID%%;*}"
 echo "JOB_ID=$JOB_ID"
 ```

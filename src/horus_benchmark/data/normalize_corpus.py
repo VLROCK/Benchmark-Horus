@@ -14,6 +14,7 @@ import re
 import sys
 import unicodedata
 from collections import Counter, defaultdict
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -96,10 +97,30 @@ def _config(path: Path) -> tuple[dict[str, Any], DatasetCatalog, RuleConfig, int
     if not source.immutable:
         raise ValueError("Source corpus must be declared immutable")
     rules = RuleConfig(**raw.get("rules", {}))
+    target_labels = raw.get("presentation_target_labels")
+    if target_labels is not None:
+        if rules.stage != "n3" or target_labels != ["synthetic"]:
+            raise ValueError("Only N3 synthetic-only presentation edits are supported")
     batch_size = int(raw.get("batch_size", 512))
     if not 1 <= batch_size <= 8192:
         raise ValueError("batch_size must be 1..8192")
     return raw, catalog, rules, batch_size
+
+
+def rules_for_label(label: str, rules: RuleConfig, config: dict[str, Any]) -> RuleConfig:
+    """Keep N3 presentation edits on synthetic rows when configured.
+
+    Historic N3 configs without presentation_target_labels stay symmetric for
+    reproducibility. N1/N2 do not inspect labels. The new N3s config uses N2
+    verbatim for humans, avoiding the N3 post-processing branch entirely.
+    """
+
+    if label not in {"human", "synthetic"}:
+        raise ValueError(f"Unexpected label_name: {label}")
+    if config.get("presentation_target_labels") == ["synthetic"] and label == "human":
+        return replace(rules, stage="n2", neutralize_markdown=False,
+                       remove_explicit_placeholders=False)
+    return rules
 
 
 def _metric_update(target: dict[str, float], prefix: str, values: dict[str, Any]) -> None:
@@ -153,7 +174,8 @@ def run(config_path: Path, output_dir: Path) -> Path:
                         raise ValueError(f"Empty or duplicated record_id: {rid!r}")
                     seen.add(rid)
                     content = record["content"]
-                    result = normalize_text(content, rules)
+                    label = str(record["label_name"])
+                    result = normalize_text(content, rules_for_label(label, rules, raw))
                     flags = set(result.flags)
                     if record.get("language_valid") is False:
                         flags.add("LANGUAGE_METADATA_INVALID")
@@ -165,10 +187,7 @@ def run(config_path: Path, output_dir: Path) -> Path:
                         flags.add("SOURCE_HASH_MISMATCH")
                     review_reasons = flags & (TEXT_REVIEW_FLAGS | SOURCE_REVIEW_FLAGS)
                     status = "review" if review_reasons else "ok"
-                    label = str(record["label_name"])
                     area = str(record["broad_area"])
-                    if label not in {"human", "synthetic"}:
-                        raise ValueError(f"Unexpected label_name for {rid}: {label}")
                     # Protected metadata are used only for *post hoc* reporting.
                     group = groups[(label, area)]
                     group["rows"] += 1
@@ -188,6 +207,7 @@ def run(config_path: Path, output_dir: Path) -> Path:
                     for operation, count in result.operations.items():
                         overall[f"operation:{operation}"] += count
                         group[f"operation:{operation}"] += count
+                        group[f"operation_rows:{operation}"] += 1
                     overall[f"status:{status}"] += 1
                     group[f"status:{status}"] += 1
                     if status == "review":
@@ -253,8 +273,8 @@ def run(config_path: Path, output_dir: Path) -> Path:
                 "review_rows": int(values["status:review"]),
                 **{name: values[name] / count for name in metric_columns},
             })
-    # Diagnostic prevalence is label-aware only *after* class-blind text
-    # normalization. It supports the later bibliography policy decision.
+    # Report operation and flag prevalence separately for each class/area.
+    # N3s is explicitly label-aware only for presentation edits.
     all_flags = sorted(key[5:] for key in overall if key.startswith("flag:"))
     with (output_dir / "flag_prevalence_by_label_area.csv").open(
         "w", encoding="utf-8", newline=""
@@ -271,11 +291,33 @@ def run(config_path: Path, output_dir: Path) -> Path:
                     "label_name": label, "broad_area": area, "flag": flag,
                     "rows": rows, "flag_rows": flagged, "rate": flagged / rows,
                 })
+    all_operations = sorted(key[10:] for key in overall if key.startswith("operation:"))
+    with (output_dir / "operation_counts_by_label_area.csv").open(
+        "w", encoding="utf-8", newline=""
+    ) as stream:
+        csv_writer = csv.DictWriter(stream, fieldnames=[
+            "label_name", "broad_area", "operation", "rows", "affected_rows",
+            "affected_rate", "occurrences", "occurrences_per_row",
+        ])
+        csv_writer.writeheader()
+        for (label, area), values in sorted(groups.items()):
+            rows = int(values["rows"])
+            for operation in all_operations:
+                count = int(values[f"operation:{operation}"])
+                csv_writer.writerow({
+                    "label_name": label, "broad_area": area, "operation": operation,
+                    "rows": rows, "affected_rows": int(values[f"operation_rows:{operation}"]),
+                    "affected_rate": values[f"operation_rows:{operation}"] / rows,
+                    "occurrences": count,
+                    "occurrences_per_row": count / rows,
+                })
     summary = {
+        "experiment_id": raw.get("experiment_id"),
         "dataset_id": catalog.dataset_id, "dataset_version": catalog.dataset_version,
         "dataset_status": catalog.status, "source": str(source),
         "source_sha256": source_hash, "source_rows": physical,
         "output_rows": overall["rows"], "stage": rules.stage,
+        "presentation_target_labels": raw.get("presentation_target_labels", ["human", "synthetic"]),
         "config_sha256": sha256_file(config_path.expanduser().resolve()),
         "code_sha256": {
             "normalize_corpus.py": sha256_file(Path(__file__)),

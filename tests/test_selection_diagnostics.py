@@ -5,7 +5,8 @@ import pandas as pd
 import pytest
 
 from horus_benchmark.audit.selection_diagnostics import (
-    _candidate_ids, _coarse_bins, _ks, _probe_split, _smd, _virtual_synthetic_only,
+    NUMBERED_LIST, UNORDERED_LIST, _candidate_ids, _check_paired_views,
+    _coarse_bins, _ks, _probe_split, _smd,
 )
 
 
@@ -30,7 +31,7 @@ def test_selection_scenarios_keep_common_area_cells_and_balance_within_bins() ->
     assert _candidate_ids(frame.sample(frac=1, random_state=3), "balanced_coarse") == {"h1", "s1"}
 
 
-def test_virtual_view_changes_synthetic_text_only_and_checks_metadata() -> None:
+def test_new_n3_keeps_human_text_and_checks_metadata() -> None:
     n2 = pd.DataFrame({
         "record_id": ["h", "s"], "label_name": ["human", "synthetic"],
         "broad_area": ["social", "social"], "source_name": ["blog", None],
@@ -40,7 +41,6 @@ def test_virtual_view_changes_synthetic_text_only_and_checks_metadata() -> None:
         "normalization_status": ["ok", "ok"],
     })
     n3 = n2.copy()
-    n3.loc[0, "content_sha256_audit"] = "human_n3"
     n3.loc[1, "content_sha256_audit"] = "synthetic_n3"
     n3.loc[1, "word_count_audit"] = 38
     n3.loc[1, "log_words"] = 3.0
@@ -50,13 +50,14 @@ def test_virtual_view_changes_synthetic_text_only_and_checks_metadata() -> None:
         if feature not in n2:
             n2[feature] = 0
             n3[feature] = 0
-    hybrid = _virtual_synthetic_only(n2, n3)
-    assert hybrid.loc[0, "content_sha256_audit"] == "human_n2"
-    assert hybrid.loc[1, "content_sha256_audit"] == "synthetic_n3"
-    assert hybrid.loc[1, "word_count_audit"] == 38
+    _check_paired_views(n2, n3)
+    n3.loc[0, "content_sha256_audit"] = "human_n3"
+    with pytest.raises(ValueError, match="byte for byte"):
+        _check_paired_views(n2, n3)
+    n3.loc[0, "content_sha256_audit"] = "human_n2"
     n3.loc[1, "generator"] = "changed"
     with pytest.raises(ValueError, match="Protected metadata"):
-        _virtual_synthetic_only(n2, n3)
+        _check_paired_views(n2, n3)
 
 
 def test_balance_diagnostics_have_expected_direction() -> None:
@@ -75,3 +76,11 @@ def test_probe_split_keeps_existing_groups_together() -> None:
     parts = _probe_split(frame, config)
     assert parts[0] == parts[1]
     assert np.array_equal(parts, _probe_split(frame, config))
+
+
+def test_unordered_and_numbered_markers_are_distinct() -> None:
+    assert UNORDERED_LIST.search("- item sem número")
+    assert not NUMBERED_LIST.search("- item sem número")
+    assert NUMBERED_LIST.search("1. seção numerada")
+    assert not UNORDERED_LIST.search("1. seção numerada")
+    assert not UNORDERED_LIST.search("**ênfase**")

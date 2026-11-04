@@ -1,8 +1,8 @@
-"""Read-only N2/N3 selection diagnostics and *candidate* simulations.
+"""Read-only N2/N3s selection diagnostics and *candidate* simulations.
 
-No row is deleted from a corpus and no final benchmark split is made. The
-synthetic-only view is virtual: N2 human rows paired with N3 synthetic rows.
-Run the analysis on the researcher's cluster, per AGENTS.md rule 19.
+No row is deleted from a corpus and no final benchmark split is made. N3s
+contains N2 human text and N3 presentation-cleaned synthetic text. Run the
+analysis on the researcher's cluster, per AGENTS.md rule 19.
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ import argparse
 import hashlib
 import json
 import math
+import re
 import sys
 from pathlib import Path
 
@@ -39,41 +40,47 @@ META = ("record_id", "label_name", "broad_area", "source_name", "generator", "sp
 FEATURES = (
     "char_count_audit", "word_count_audit", "paragraph_count", "nonempty_line_count",
     "punctuation_per_100_words", "comma_per_100_words", "quote_per_100_words",
-    "newline_per_100_words", "markdown_bullet", "markdown_heading",
+    "newline_per_100_words", "markdown_bullet", "unordered_list_marker",
+    "numbered_list_marker", "markdown_heading",
     "markdown_code_fence", "html_tag", "url_in_content",
 )
 BALANCE_FEATURES = (
     "log_words", "log_chars", "paragraph_count", "nonempty_line_count",
     "punctuation_per_100_words", "comma_per_100_words", "quote_per_100_words",
-    "newline_per_100_words", "markdown_bullet", "markdown_heading",
+    "newline_per_100_words", "markdown_bullet", "unordered_list_marker",
+    "numbered_list_marker", "markdown_heading",
     "markdown_code_fence", "html_tag", "url_in_content",
 )
 PROBES = {
     "length": ("log_words", "log_chars"),
     "presentation": (
         "paragraph_count", "nonempty_line_count", "newline_per_100_words",
-        "markdown_bullet", "markdown_heading", "markdown_code_fence", "html_tag",
+        "markdown_bullet", "unordered_list_marker", "numbered_list_marker",
+        "markdown_heading", "markdown_code_fence", "html_tag",
     ),
     "punctuation": (
         "punctuation_per_100_words", "comma_per_100_words", "quote_per_100_words",
     ),
     "length_presentation": (
         "log_words", "log_chars", "paragraph_count", "nonempty_line_count",
-        "newline_per_100_words", "markdown_bullet", "markdown_heading",
+        "newline_per_100_words", "markdown_bullet", "unordered_list_marker",
+        "numbered_list_marker", "markdown_heading",
         "markdown_code_fence", "html_tag",
     ),
 }
 LABELS = ("human", "synthetic")
 SCENARIOS = ("full", "common_support", "balanced_coarse", "balanced_fine")
-VIEWS = ("n2", "n3", "n3_synthetic_only")
+VIEWS = ("n2", "n3")
+UNORDERED_LIST = re.compile(r"(?m)^[ \t]*[-*+][ \t]+\S")
+NUMBERED_LIST = re.compile(r"(?m)^[ \t]*\d+[.)][ \t]+\S")
 
 
 def _validated_config(path: Path) -> dict:
     config = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if config.get("schema_version") != 1 or config.get("experiment_id") != "n2-n3-selection-diagnostics-v1":
+    if config.get("schema_version") != 1 or config.get("experiment_id") != "n2-n3s-selection-diagnostics-v1":
         raise ValueError("Unexpected selection diagnostics config")
     if tuple(config.get("scenarios", ())) != SCENARIOS or tuple(config.get("views", ())) != VIEWS:
-        raise ValueError("This version requires all three views and four scenarios")
+        raise ValueError("This version requires N2, N3s and four scenarios")
     edges = config.get("coarse_word_edges")
     if not isinstance(edges, list) or len(edges) < 2 or edges[0] != 0 or sorted(set(edges)) != edges:
         raise ValueError("coarse_word_edges must be unique, increasing and start at zero")
@@ -94,6 +101,15 @@ def _check_view(run_dir: Path, expected_stage: str) -> tuple[Path, dict]:
         raise ValueError(f"Summary disagrees with verification: {run_dir}")
     if summary.get("source_sha256") != verification.get("source_sha256"):
         raise ValueError(f"Source SHA-256 disagrees: {run_dir}")
+    if expected_stage == "n3" and (
+        summary.get("presentation_target_labels") != ["synthetic"]
+        or summary.get("experiment_id") != "corpus-normalization-n3-synthetic-presentation-v1"
+    ):
+        raise ValueError("Selection diagnostics require the NEW synthetic-only N3 run")
+    if expected_stage == "n3":
+        cross_check = json.loads((run_dir / "class_specific_verification.json").read_text(encoding="utf-8"))
+        if cross_check.get("verified") is not True or cross_check["counts"]["human_changed"] != 0:
+            raise ValueError("N3s must pass the direct N2 human-preservation check")
     corpus = run_dir / "normalized_corpus.parquet"
     if pq.ParquetFile(corpus).metadata.num_rows != verification["rows"]:
         raise ValueError(f"Physical row count disagrees: {corpus}")
@@ -110,7 +126,10 @@ def _load_view(corpus: Path, trace: Path) -> pd.DataFrame:
         for row in batch.to_pylist():
             if row["label_name"] not in LABELS or not isinstance(row["content"], str):
                 raise ValueError("Invalid label or content in normalized corpus")
-            feature = extract_text_features(row.pop("content"))
+            content = row.pop("content")
+            feature = extract_text_features(content)
+            feature["unordered_list_marker"] = bool(UNORDERED_LIST.search(content))
+            feature["numbered_list_marker"] = bool(NUMBERED_LIST.search(content))
             rows.append({**row, **{key: feature[key] for key in FEATURES},
                          "content_sha256_audit": feature["content_sha256_audit"]})
     frame = pd.DataFrame.from_records(rows)
@@ -127,18 +146,17 @@ def _load_view(corpus: Path, trace: Path) -> pd.DataFrame:
     return frame.sort_values("record_id", kind="stable").reset_index(drop=True)
 
 
-def _virtual_synthetic_only(n2: pd.DataFrame, n3: pd.DataFrame) -> pd.DataFrame:
+def _check_paired_views(n2: pd.DataFrame, n3: pd.DataFrame) -> None:
     if len(n2) != len(n3) or not n2.record_id.equals(n3.record_id):
         raise ValueError("N2 and N3 must have precisely the same sorted IDs")
     for col in META[1:]:
         if not n2[col].fillna("<NULL>").equals(n3[col].fillna("<NULL>")):
             raise ValueError(f"Protected metadata changed between N2 and N3: {col}")
-    hybrid = n2.copy()
-    synthetic = hybrid.label_name.eq("synthetic")
-    varying = [*FEATURES, "content_sha256_audit", "normalization_status", "log_words", "log_chars"]
-    for column in varying:
-        hybrid.loc[synthetic, column] = n3.loc[synthetic, column].to_numpy()
-    return hybrid
+    human = n2.label_name.eq("human")
+    if not n2.loc[human, "content_sha256_audit"].equals(
+        n3.loc[human, "content_sha256_audit"]
+    ):
+        raise ValueError("Human N3s texts must match N2 byte for byte")
 
 
 def _coarse_bins(words: pd.Series, edges: list[int]) -> pd.Series:
@@ -246,6 +264,8 @@ def _composition_rows(frame: pd.DataFrame, full: pd.DataFrame, view: str, scenar
             "words_q95": float(words.quantile(.95)),
             "review_rate": float(group.normalization_status.eq("review").mean()),
             "markdown_bullet_rate": float(group.markdown_bullet.mean()),
+            "unordered_list_marker_rate": float(group.unordered_list_marker.mean()),
+            "numbered_list_marker_rate": float(group.numbered_list_marker.mean()),
             "provenance_field": provenance, "provenance_unique": len(counts),
             "largest_provenance": str(counts.index[0]),
             "largest_provenance_share": float(shares.iloc[0]),
@@ -389,8 +409,8 @@ def run(config_path: Path, n2_run: Path, n3_run: Path, output: Path) -> Path:
     output.mkdir(parents=True)
     n2 = _load_view(n2_corpus, n2_run / "normalization_trace.parquet")
     n3 = _load_view(n3_corpus, n3_run / "normalization_trace.parquet")
-    hybrid = _virtual_synthetic_only(n2, n3)
-    views = {"n2": n2, "n3": n3, "n3_synthetic_only": hybrid}
+    _check_paired_views(n2, n3)
+    views = {"n2": n2, "n3": n3}
     balance_rows, composition_rows, probe_rows, support_rows, membership_rows = [], [], [], [], []
     provenance_rows, provenance_bin_rows = [], []
     ids_by_case: dict[tuple[str, str], set[str]] = {}
@@ -416,7 +436,7 @@ def run(config_path: Path, n2_run: Path, n3_run: Path, output: Path) -> Path:
     # Hold N2 candidate IDs fixed to isolate the effect of presentation rules.
     # Independent selections above answer the separate question of whether N3
     # changes *which* documents a length-based selection would retain.
-    for view in ("n3", "n3_synthetic_only"):
+    for view in ("n3",):
         frame = _add_bins(views[view], config, int(config["seed"]))
         for scenario in SCENARIOS:
             fixed_name = f"n2_fixed_{scenario}"
@@ -439,7 +459,7 @@ def run(config_path: Path, n2_run: Path, n3_run: Path, output: Path) -> Path:
     pairwise = []
     for scenario in SCENARIOS:
         left = ids_by_case[("n2", scenario)]
-        for right_view in ("n3", "n3_synthetic_only"):
+        for right_view in ("n3",):
             right = ids_by_case[(right_view, scenario)]
             pairwise.append({"scenario": scenario, "left_view": "n2", "right_view": right_view,
                              "shared_ids": len(left & right), "n2_only": len(left - right),
@@ -465,7 +485,7 @@ def run(config_path: Path, n2_run: Path, n3_run: Path, output: Path) -> Path:
         "python": sys.version, "pandas": pd.__version__, "pyarrow": pa.__version__,
         "sklearn": sklearn.__version__,
         "selection_status": "candidate_simulations_only",
-        "n3_synthetic_only": "Virtual N2 humans + N3 synthetics; no corpus was written",
+        "n3_presentation_target_labels": ["synthetic"],
         "limitations": [
             "Existing near-duplicate and parent-document leakage is not resolved.",
             "Probe group splits use source split_group_id when available and remain exploratory.",
@@ -477,8 +497,8 @@ def run(config_path: Path, n2_run: Path, n3_run: Path, output: Path) -> Path:
                                          encoding="utf-8")
     (output / "README.md").write_text(
         "# Diagnóstico de seleção N2/N3\n\n"
-        "Todas as views usam os mesmos IDs e o corpus completo. "
-        "`n3_synthetic_only` é uma combinação virtual de humanos N2 e sintéticos N3. "
+        "As duas views usam os mesmos IDs e o corpus completo. "
+        "N3s preserva exatamente o conteúdo humano da N2 e aplica Markdown/placeholder só aos sintéticos. "
         "Nenhum critério de seleção está aprovado e nenhum corpus final foi escrito.\n\n"
         "- `common_support.csv`: contagem e potencial de pares por área/faixa.\n"
         "- `provenance_by_length_bin.csv`: fontes e geradores em cada faixa.\n"

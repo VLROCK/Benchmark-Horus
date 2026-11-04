@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 import json
 
 import pyarrow as pa
@@ -11,13 +12,13 @@ import yaml
 from horus_benchmark.data.normalization import (
     RuleConfig, apply_n2_edits, n2_loss_guard, normalize_text, propose_n2_edits,
 )
-from horus_benchmark.data.normalize_corpus import run
+from horus_benchmark.data.normalize_corpus import rules_for_label, run
 from horus_benchmark.data.normalization_diagnostics import run as run_diagnostics
 from horus_benchmark.data.normalization_report import build_report
 from horus_benchmark.data.normalization_review import export_review
 from horus_benchmark.data.prepare_normalized_audit import prepare
 from horus_benchmark.data.preview_n2 import run as preview_n2
-from horus_benchmark.data.verify_normalization import verify
+from horus_benchmark.data.verify_normalization import verify, verify_n3s_against_n2
 from horus_benchmark.data.verify_hash_repair import run as verify_hash_repair
 
 
@@ -133,6 +134,20 @@ def test_n3_without_new_rules_is_identical_to_n2() -> None:
     assert normalize_text(text, RuleConfig(stage="n3")).text == normalize_text(
         text, RuleConfig(stage="n2")
     ).text
+
+
+def test_n3s_presentation_edits_only_synthetic_class() -> None:
+    text = "# Aviso\n- **Item**\n[Seu Nome]"
+    config = {"presentation_target_labels": ["synthetic"]}
+    rules = RuleConfig(stage="n3", neutralize_markdown=True,
+                       remove_explicit_placeholders=True)
+    human = normalize_text(text, rules_for_label("human", rules, config))
+    synthetic = normalize_text(text, rules_for_label("synthetic", rules, config))
+    assert human.text == normalize_text(text, RuleConfig(stage="n2")).text
+    assert "# Aviso" in human.text and "[Seu Nome]" in human.text
+    assert "# Aviso" not in synthetic.text and "[Seu Nome]" not in synthetic.text
+    assert "N3_CHANGED" not in human.flags
+    assert "N3_CHANGED" in synthetic.flags
 
 
 def test_contact_mask_keeps_sentence_punctuation() -> None:
@@ -366,3 +381,56 @@ def test_full_stream_preserves_rows_and_protected_metadata(tmp_path) -> None:
     preview = json.loads((preview_dir / "summary.json").read_text(encoding="utf-8"))
     assert preview["counts"]["rows"] == 2
     assert preview["counts"].get("candidate_rows", 0) == 0
+
+
+def test_n3s_stream_and_verifier_preserve_human_n2_exactly(tmp_path) -> None:
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    content = "# Título\n- **Item**\n[Seu Nome]"
+    schema = pa.schema([
+        ("record_id", pa.large_string()), ("content", pa.large_string()),
+        ("char_count", pa.int64()), ("word_count", pa.int64()),
+        ("content_hash", pa.large_string()), ("normalized_hash", pa.large_string()),
+        ("label_name", pa.large_string()), ("broad_area", pa.large_string()),
+    ])
+    originals = [{"record_id": rid, "content": content, "char_count": len(content),
+                  "word_count": len(content.split()), "content_hash": "legacy",
+                  "normalized_hash": "legacy", "label_name": label,
+                  "broad_area": "social"}
+                 for rid, label in (("h1", "human"), ("s1", "synthetic"))]
+    pq.write_table(pa.Table.from_pylist(originals, schema=schema), source_dir / "all.parquet")
+    dataset = {"dataset_id": "fixture", "dataset_version": "fixture-v1",
+               "workspace_root": ".", "resources": {"corpus": {
+                   "path": "source/all.parquet", "format": "parquet",
+                   "role": "processed_canonical_corpus", "expected_rows": 2,
+                   "immutable": True}}}
+    (tmp_path / "dataset.yaml").write_text(yaml.safe_dump(dataset), encoding="utf-8")
+    base = {"schema_version": 1, "workspace_root": ".", "dataset_config": "dataset.yaml",
+            "corpus_resource": "corpus", "batch_size": 2}
+    n2_config = tmp_path / "n2.yaml"
+    n2_config.write_text(yaml.safe_dump({**base, "rules": {"stage": "n2"}}), encoding="utf-8")
+    n3_config = tmp_path / "n3s.yaml"
+    n3_config.write_text(yaml.safe_dump({**base,
+        "experiment_id": "corpus-normalization-n3-synthetic-presentation-v1",
+        "presentation_target_labels": ["synthetic"],
+        "rules": {"stage": "n3", "neutralize_markdown": True,
+                  "remove_explicit_placeholders": True}}), encoding="utf-8")
+    n2_run, n3_run = tmp_path / "derived-n2", tmp_path / "derived-n3s"
+    run(n2_config, n2_run)
+    run(n3_config, n3_run)
+    assert verify(n2_config, n2_run).is_file()
+    assert verify(n3_config, n3_run).is_file()
+    cross_check = verify_n3s_against_n2(n2_run, n3_run)
+    assert json.loads(cross_check.read_text(encoding="utf-8"))["counts"]["human_rows"] == 1
+    n2_rows = pq.read_table(n2_run / "normalized_corpus.parquet").to_pylist()
+    n3_rows = pq.read_table(n3_run / "normalized_corpus.parquet").to_pylist()
+    assert n2_rows[0]["content"] == n3_rows[0]["content"]
+    assert n2_rows[0]["content_hash"] == n3_rows[0]["content_hash"]
+    assert n2_rows[1]["content"] != n3_rows[1]["content"]
+    assert n3_rows[1]["content"] == "Título\nItem"
+    with (n3_run / "operation_counts_by_label_area.csv").open(encoding="utf-8") as stream:
+        operations = list(csv.DictReader(stream))
+    markdown = [row for row in operations if row["operation"] == "MARKDOWN_BULLET"]
+    assert {row["label_name"]: int(row["occurrences"]) for row in markdown} == {
+        "human": 0, "synthetic": 1,
+    }

@@ -1,4 +1,8 @@
-# N3: ensaio de neutralização de apresentação
+# N3: ensaio histórico de neutralização simétrica de apresentação
+
+Esta documentação preserva a N3 simétrica anterior. Para a nova execução que
+restringe Markdown e placeholders aos sintéticos, use
+`scripts/SELECTION_DIAGNOSTICS_N2_N3.md` e `HORUS_NORMALIZE_STAGE=n3s`.
 
 ## Hipótese e escopo
 

@@ -12,7 +12,7 @@ import pyarrow.dataset as ds
 
 from horus_benchmark.audit import text_features
 from horus_benchmark.data import normalization
-from horus_benchmark.data.normalize_corpus import _config, comparison_hash, sha256_file
+from horus_benchmark.data.normalize_corpus import _config, comparison_hash, rules_for_label, sha256_file
 from horus_benchmark.data import normalize_corpus
 from horus_benchmark.data.normalization import normalize_text
 
@@ -27,7 +27,7 @@ def _rows(path: Path):
 
 
 def verify(config_path: Path, run_dir: Path) -> Path:
-    _, catalog, rules, _ = _config(config_path)
+    config, catalog, rules, _ = _config(config_path)
     run_dir = run_dir.expanduser().resolve()
     summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
     if sha256_file(config_path.expanduser().resolve()) != summary["config_sha256"]:
@@ -62,7 +62,7 @@ def verify(config_path: Path, run_dir: Path) -> Path:
                 raise ValueError(f"Protected field {field} changed for {rid}")
         before = original["content"]
         after = derived["content"]
-        if normalize_text(before, rules).text != after:
+        if normalize_text(before, rules_for_label(original["label_name"], rules, config)).text != after:
             raise ValueError(f"Derived text does not match configured rules for {rid}")
         before_hash = hashlib.sha256(before.encode("utf-8")).hexdigest()
         after_hash = hashlib.sha256(after.encode("utf-8")).hexdigest()
@@ -87,12 +87,62 @@ def verify(config_path: Path, run_dir: Path) -> Path:
     return target
 
 
+def verify_n3s_against_n2(n2_run: Path, n3s_run: Path) -> Path:
+    """Prove that N3s did not change any human text or protected metadata."""
+
+    n2_run, n3s_run = n2_run.expanduser().resolve(), n3s_run.expanduser().resolve()
+    n2_summary = json.loads((n2_run / "summary.json").read_text(encoding="utf-8"))
+    n3s_summary = json.loads((n3s_run / "summary.json").read_text(encoding="utf-8"))
+    n2_verified = json.loads((n2_run / "verification.json").read_text(encoding="utf-8"))
+    n3s_verified = json.loads((n3s_run / "verification.json").read_text(encoding="utf-8"))
+    if (n2_verified.get("verified") is not True or n3s_verified.get("verified") is not True
+            or n2_verified.get("stage") != "n2" or n3s_verified.get("stage") != "n3"
+            or n2_verified.get("rows") != n3s_verified.get("rows")
+            or n2_summary["source_sha256"] != n3s_summary["source_sha256"]
+            or n3s_summary.get("experiment_id") != "corpus-normalization-n3-synthetic-presentation-v1"
+            or n3s_summary.get("presentation_target_labels") != ["synthetic"]):
+        raise ValueError("N2 and N3s must be verified and share the same source")
+    counts = {"human_rows": 0, "human_changed": 0, "synthetic_rows": 0,
+              "synthetic_changed": 0}
+    for n2, n3s in zip_longest(
+        _rows(n2_run / "normalized_corpus.parquet"),
+        _rows(n3s_run / "normalized_corpus.parquet"),
+    ):
+        if n2 is None or n3s is None or n2["record_id"] != n3s["record_id"]:
+            raise ValueError("N2 and N3s rows are missing or misaligned")
+        for field in n2:
+            if field not in REWRITTEN and n2[field] != n3s[field]:
+                raise ValueError(f"Protected field {field} changed for {n2['record_id']}")
+        label = n2["label_name"]
+        if label not in {"human", "synthetic"}:
+            raise ValueError(f"Unexpected label: {label}")
+        counts[f"{label}_rows"] += 1
+        if label == "human":
+            for field in REWRITTEN:
+                if n2[field] != n3s[field]:
+                    raise ValueError(f"N3s altered human {field} for {n2['record_id']}")
+        elif n2["content"] != n3s["content"]:
+            counts["synthetic_changed"] += 1
+    if sum(counts[key] for key in ("human_rows", "synthetic_rows")) != n2_summary["output_rows"]:
+        raise ValueError("N2/N3s comparison has the wrong row count")
+    target = n3s_run / "class_specific_verification.json"
+    if target.exists():
+        raise FileExistsError(f"Refusing to overwrite {target}")
+    target.write_text(json.dumps({"verified": True, "n2_run": str(n2_run),
+                                  "n3s_run": str(n3s_run), "counts": counts},
+                                 indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return target
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--run-dir", type=Path, required=True)
+    parser.add_argument("--baseline-n2-run", type=Path)
     args = parser.parse_args(argv)
     print(verify(args.config, args.run_dir))
+    if args.baseline_n2_run is not None:
+        print(verify_n3s_against_n2(args.baseline_n2_run, args.run_dir))
     return 0
 
 

@@ -19,16 +19,23 @@ export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
 
 stage="${HORUS_NORMALIZE_STAGE:-n1}"
 case "$stage" in
-  n1|n2|n3) config="configs/experiments/corpus_normalization_${stage}.yaml" ;;
-  *) echo "HORUS_NORMALIZE_STAGE must be n1, n2, or n3" >&2; exit 2 ;;
+  n1|n2|n3|n3s) config="configs/experiments/corpus_normalization_${stage}.yaml" ;;
+  *) echo "HORUS_NORMALIZE_STAGE must be n1, n2, n3, or n3s" >&2; exit 2 ;;
 esac
 output="${HORUS_NORMALIZE_OUTPUT:-results/normalization/full-${stage}-${SLURM_JOB_ID:?}}"
 test ! -e "$output"
 "$python_bin" -m horus_benchmark.data.normalize_corpus --config "$config" --output-dir "$output"
-"$python_bin" -m horus_benchmark.data.verify_normalization --config "$config" --run-dir "$output"
+verify_args=()
+if [[ "$stage" == "n3s" ]]; then
+  n2_run="${HORUS_N2_RUN:-results/normalization/full-n2-116035}"
+  test -s "$n2_run/normalized_corpus.parquet"
+  test -s "$n2_run/verification.json"
+  verify_args=(--baseline-n2-run "$n2_run")
+fi
+"$python_bin" -m horus_benchmark.data.verify_normalization --config "$config" --run-dir "$output" "${verify_args[@]}"
 "$python_bin" -m horus_benchmark.data.normalization_report --run-dir "$output"
 review_args=()
-if [[ "$stage" == "n3" ]]; then
+if [[ "$stage" == "n3" || "$stage" == "n3s" ]]; then
   review_args=(--per-cell 4 --maximum 720)
 fi
 "$python_bin" -m horus_benchmark.data.normalization_review \
