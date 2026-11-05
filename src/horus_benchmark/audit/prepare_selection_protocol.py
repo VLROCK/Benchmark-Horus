@@ -24,7 +24,7 @@ from horus_benchmark.protocols import grouped_iid
 from horus_benchmark.audit.selection_diagnostics import _check_view
 from horus_benchmark.data.normalize_corpus import sha256_file
 from horus_benchmark.protocols.grouped_iid import (
-    SPLITS, add_strata, assign_groups, check_observed_pairs, split_diagnostics,
+    add_strata, assign_heldout_cv, check_observed_pairs, split_diagnostics,
     stable_key,
 )
 
@@ -44,12 +44,14 @@ def layout_control_text(content: str) -> str:
 
 def _config(path: Path) -> dict:
     config = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if config.get("experiment_id") != "horus-grouped-iid-layout-control-v1":
+    if config.get("experiment_id") != "horus-grouped-iid-layout-control-v2":
         raise ValueError("Wrong protocol experiment_id")
     if config.get("selection_scenario") != "w0.25_s20261103":
         raise ValueError("This protocol requires the reviewed N2 width-0.25 candidate")
     if not config.get("split_seeds") or len(set(config["split_seeds"])) != len(config["split_seeds"]):
         raise ValueError("Nonempty unique split_seeds required")
+    if not 0 < float(config.get("test_fraction", 0)) < 1 or int(config.get("cv_folds", 0)) < 2:
+        raise ValueError("Positive holdout and at least two CV folds required")
     return config
 
 
@@ -228,36 +230,64 @@ def run(config_path: Path, selection: Path, raw: Path, n2_run: Path,
     selected = add_strata(selected, list(config["coarse_word_edges"]))
     output.mkdir(parents=True)
     print(f"Selected N2 documents: {len(selected)}", flush=True)
-    fractions = {part: float(config[f"{part}_fraction"]) for part in SPLITS}
+    test_fraction = float(config["test_fraction"])
+    folds = int(config["cv_folds"])
+    holdout_fractions = {"development": 1 - test_fraction, "test": test_fraction}
+    fold_fractions = {f"fold_{index}": 1 / folds for index in range(folds)}
     split_summaries = []
     for seed in config["split_seeds"]:
-        split = assign_groups(selected, fractions, int(seed))
+        split = assign_heldout_cv(selected, test_fraction, folds, int(seed))
         pair_check = check_observed_pairs(split, pairs)
-        strata, area = split_diagnostics(split, fractions)
+        strata, area = split_diagnostics(split, holdout_fractions)
         provenance = _provenance_table(split, selected)
+        dev = split.loc[split.split.eq("development")].copy()
+        dev["split"] = dev.fold.map(lambda index: f"fold_{index}")
+        fold_strata, fold_area = split_diagnostics(dev, fold_fractions)
+        fold_provenance = _provenance_table(dev, selected)
         suffix = f"seed{seed}"
-        split_path = output / f"iid_split_{suffix}.parquet"
+        split_path = output / f"iid_holdout_{folds}fold_{suffix}.parquet"
         pq.write_table(pa.Table.from_pandas(split, preserve_index=False),
                        split_path, compression="zstd")
-        strata.to_csv(output / f"strata_balance_{suffix}.csv", index=False)
-        area.to_csv(output / f"area_label_balance_{suffix}.csv", index=False)
-        provenance.to_csv(output / f"provenance_by_split_{suffix}.csv", index=False)
-        split.groupby(["split", "probe_group_id"]).agg(
+        strata.to_csv(output / f"holdout_strata_balance_{suffix}.csv", index=False)
+        area.to_csv(output / f"holdout_area_label_balance_{suffix}.csv", index=False)
+        provenance.to_csv(output / f"holdout_provenance_{suffix}.csv", index=False)
+        fold_strata.to_csv(output / f"dev_fold_strata_balance_{suffix}.csv", index=False)
+        fold_area.to_csv(output / f"dev_fold_area_label_balance_{suffix}.csv", index=False)
+        fold_provenance.to_csv(output / f"dev_fold_provenance_{suffix}.csv", index=False)
+        split.groupby(["split", "fold", "probe_group_id"]).agg(
             rows=("record_id", "size"), areas=("broad_area", "nunique"),
             labels=("label_name", "nunique")
         ).reset_index().sort_values("rows", ascending=False).head(30).to_csv(
             output / f"largest_groups_{suffix}.csv", index=False)
         split_sizes = split.split.value_counts().to_dict()
-        missing_area_label = (area.groupby(["broad_area", "label_name"]).split.nunique() < 3).sum()
+        fold_sizes = dev.fold.value_counts().sort_index().to_dict()
+        role_rows = []
+        for fold in range(folds):
+            roles = split[["broad_area", "label_name", "split", "fold"]].copy()
+            roles["role"] = roles.split.where(roles.split.eq("test"), "train")
+            roles.loc[roles.split.eq("development") & roles.fold.eq(fold), "role"] = "validation"
+            grouped = roles.groupby(["broad_area", "label_name", "role"]).size()
+            role_rows.extend({"fold": fold, "broad_area": area_name, "label_name": label,
+                              "role": role, "rows": int(count)}
+                             for (area_name, label, role), count in grouped.items())
+        pd.DataFrame(role_rows).to_csv(output / f"cv_round_roles_{suffix}.csv", index=False)
+        missing_area_label = (area.groupby(["broad_area", "label_name"]).split.nunique() < 2).sum()
+        missing_fold_area_label = (fold_area.groupby(["broad_area", "label_name"]).split.nunique()
+                                   < folds).sum()
         maximum_group = int(split.groupby("probe_group_id").size().max())
         summary = {"seed": int(seed), "rows": len(split), "split_sizes": split_sizes,
+                   "development_fold_sizes": {str(k): int(v) for k, v in fold_sizes.items()},
                    "split_manifest_sha256": sha256_file(split_path),
-                   "missing_area_label_cells": int(missing_area_label),
+                   "missing_holdout_area_label_cells": int(missing_area_label),
+                   "missing_development_fold_area_label_cells": int(missing_fold_area_label),
                    "max_group_size": maximum_group,
-                   "max_stratum_share_deviation": float(strata.share_minus_target.abs().max()),
+                   "max_holdout_stratum_share_deviation": float(strata.share_minus_target.abs().max()),
+                   "max_development_fold_stratum_share_deviation": float(
+                       fold_strata.share_minus_target.abs().max()),
                    **pair_check}
         split_summaries.append(summary)
-        print(f"IID candidate seed {seed}: {split_sizes}; near-pair crossings=0", flush=True)
+        print(f"IID seed {seed}: holdout {split_sizes}; five folds {fold_sizes}; "
+              "near-pair crossings=0", flush=True)
     control_rows, diagnostic_rows = [], []
     for row in selected.itertuples(index=False):
         control = layout_control_text(row.content)
@@ -288,8 +318,9 @@ def run(config_path: Path, selection: Path, raw: Path, n2_run: Path,
     loss = pd.read_csv(selection / "dialogue_marker_loss.csv")
     sample = _format_sample(selected, loss, config)
     _write_format_sample(sample, raw, selected, n3_corpus, output)
-    summary = {"experiment_id": config["experiment_id"], "status": "provisional_iid_candidates",
+    summary = {"experiment_id": config["experiment_id"], "status": "provisional_iid_holdout_cv",
                "selection_scenario": config["selection_scenario"],
+               "test_fraction": test_fraction, "development_folds": folds,
                "selected_rows": len(selected), "source_sha256": n2_ver["source_sha256"],
                "selection_summary_sha256": sha256_file(selection / "summary.json"),
                "candidate_membership_sha256": sha256_file(selection / "candidate_membership.parquet"),
@@ -311,12 +342,14 @@ def run(config_path: Path, selection: Path, raw: Path, n2_run: Path,
     (output / "README.md").write_text(
         "# Protocolo IID agrupado e controle de layout — candidatos\n\n"
         "A seleção N2 `w0.25_s20261103` fornece os mesmos IDs para as duas condições. "
-        "`iid_split_seed*.parquet` mantém todos os pares aproximados observados na mesma partição. "
+        "`iid_holdout_5fold_seed*.parquet` reserva 15% para teste e marca os "
+        "85% restantes como desenvolvimento com `fold` de 0 a 4. Teste tem `fold=-1`. "
+        "Em cada rodada, o fold indicado é validação e os outros quatro são treino. "
+        "Todos os pares aproximados observados ficam na mesma partição e fold. "
         "`layout_control_corpus.parquet` troca quebras de linha por espaços em ambas as classes; "
         "a sequência de tokens separados por whitespace é idêntica à N2. "
         "A N2 original continua sendo a condição principal.\n\n"
-        "`strata_balance_*.csv`, `area_label_balance_*.csv`, `provenance_by_split_*.csv` "
-        "e `largest_groups_*.csv` "
+        "`holdout_*`, `dev_fold_*`, `cv_round_roles_*` e `largest_groups_*` "
         "permitem avaliar a composição antes de congelar os splits. "
         "`format_samples_manifest.csv` identifica amostras por fonte, área e motivo; "
         "`format_samples_blind.jsonl` contém os textos bruto/N2/N3s e fica fora do Git. "

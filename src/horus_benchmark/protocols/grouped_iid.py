@@ -33,15 +33,16 @@ def add_strata(frame: pd.DataFrame, word_edges: list[int]) -> pd.DataFrame:
     return out
 
 
-def assign_groups(frame: pd.DataFrame, fractions: dict[str, float], seed: int) -> pd.DataFrame:
+def assign_partitions(frame: pd.DataFrame, fractions: dict[str, float], seed: int) -> pd.DataFrame:
     """Greedy minimum incremental standardized imbalance over group vectors.
 
     Groups are indivisible. Largest groups are placed first; deterministic hash
     breaks ties. The objective controls area × class × coarse length and total
     size. It is a construction heuristic, not proof of ideal stratification.
     """
-    if set(fractions) != set(SPLITS) or any(fractions[x] <= 0 for x in SPLITS):
-        raise ValueError("Positive train/validation/test fractions required")
+    parts = tuple(fractions)
+    if len(parts) < 2 or any(fractions[x] <= 0 for x in parts):
+        raise ValueError("At least two positive partition fractions required")
     if not math.isclose(sum(fractions.values()), 1.0):
         raise ValueError("Split fractions must sum to one")
     if frame.record_id.duplicated().any() or frame.probe_group_id.isna().any():
@@ -51,28 +52,28 @@ def assign_groups(frame: pd.DataFrame, fractions: dict[str, float], seed: int) -
     vectors = counts.to_numpy(dtype=np.float64)
     sizes = vectors.sum(axis=1)
     strata_totals = vectors.sum(axis=0)
-    target = np.array([fractions[name] for name in SPLITS])[:, None] * strata_totals
-    size_target = np.array([fractions[name] for name in SPLITS]) * len(frame)
+    target = np.array([fractions[name] for name in parts])[:, None] * strata_totals
+    size_target = np.array([fractions[name] for name in parts]) * len(frame)
     weights = 1.0 / np.maximum(strata_totals, 1.0)
     current = np.zeros_like(target)
-    current_size = np.zeros(3, dtype=np.float64)
+    current_size = np.zeros(len(parts), dtype=np.float64)
     order = sorted(range(len(groups)), key=lambda idx: (-sizes[idx], stable_key(seed, groups[idx])))
     assignments: dict[str, str] = {}
     for idx in order:
         vector = vectors[idx]
         size = sizes[idx]
         scores = []
-        for part in range(3):
+        for part in range(len(parts)):
             old = current[part] - target[part]
             new = old + vector
             delta = float(np.sum((new * new - old * old) * weights))
             old_size = current_size[part] - size_target[part]
             delta += float((2 * old_size * size + size * size) / len(frame))
-            scores.append((delta, stable_key(seed, f"{groups[idx]}|{SPLITS[part]}"), part))
+            scores.append((delta, stable_key(seed, f"{groups[idx]}|{parts[part]}"), part))
         choice = min(scores)[2]
         current[choice] += vector
         current_size[choice] += size
-        assignments[groups[idx]] = SPLITS[choice]
+        assignments[groups[idx]] = parts[choice]
     result = frame[["record_id", "probe_group_id", "stratum", "broad_area", "label_name",
                     "length_stratum"]].copy()
     result["split"] = result.probe_group_id.map(assignments)
@@ -81,8 +82,46 @@ def assign_groups(frame: pd.DataFrame, fractions: dict[str, float], seed: int) -
     return result
 
 
+def assign_groups(frame: pd.DataFrame, fractions: dict[str, float], seed: int) -> pd.DataFrame:
+    """Legacy three-way candidate splitter, retained for existing tests."""
+    if set(fractions) != set(SPLITS):
+        raise ValueError("Expected train/validation/test fractions")
+    return assign_partitions(frame, fractions, seed)
+
+
+def assign_heldout_cv(frame: pd.DataFrame, test_fraction: float, folds: int,
+                      seed: int) -> pd.DataFrame:
+    """Reserve grouped IID test, then allocate each development group one fold."""
+    if not 0 < test_fraction < 1 or folds < 2:
+        raise ValueError("Invalid test fraction or fold count")
+    outer = assign_partitions(frame, {"development": 1 - test_fraction,
+                                      "test": test_fraction}, seed)
+    if set(outer.split) != {"development", "test"}:
+        raise ValueError("Grouped holdout produced an empty partition")
+    development = outer.loc[outer.split.eq("development")].copy()
+    if development.probe_group_id.nunique() < folds:
+        raise ValueError("Too few development groups for requested folds")
+    names = tuple(f"fold_{index}" for index in range(folds))
+    inner = assign_partitions(development, {name: 1 / folds for name in names}, seed + 1000003)
+    if set(inner.split) != set(names):
+        raise ValueError("Grouped cross-validation produced an empty fold")
+    fold_by_id = inner.set_index("record_id").split.map(
+        {name: index for index, name in enumerate(names)})
+    outer["fold"] = outer.record_id.map(fold_by_id).fillna(-1).astype(int)
+    if outer.loc[outer.split.eq("test"), "fold"].ne(-1).any():
+        raise AssertionError("Test rows entered a development fold")
+    if outer.loc[outer.split.eq("development"), "fold"].lt(0).any():
+        raise AssertionError("Development rows missing a fold")
+    if outer.groupby("probe_group_id").agg(
+            partitions=("split", "nunique"), folds=("fold", "nunique")
+    ).max().gt(1).any():
+        raise AssertionError("Group crosses holdout or development folds")
+    return outer
+
+
 def check_observed_pairs(split: pd.DataFrame, pairs: pd.DataFrame) -> dict[str, int]:
-    by_id = split.set_index("record_id").split.to_dict()
+    columns = ["split", "fold"] if "fold" in split else ["split"]
+    by_id = {rid: tuple(values) for rid, values in split.set_index("record_id")[columns].iterrows()}
     both = crossing = 0
     for pair in pairs.itertuples(index=False):
         left = by_id.get(pair.left_record_id)
@@ -102,7 +141,7 @@ def split_diagnostics(split: pd.DataFrame, fractions: dict[str, float]) -> tuple
     overall = split.groupby(["broad_area", "label_name", "length_stratum"]).size(
     ).rename("total_rows").reset_index()
     grid = pd.MultiIndex.from_product(
-        [SPLITS, sorted(split.broad_area.unique()), sorted(split.label_name.unique()),
+        [tuple(fractions), sorted(split.broad_area.unique()), sorted(split.label_name.unique()),
          sorted(split.length_stratum.unique())],
         names=["split", "broad_area", "label_name", "length_stratum"]).to_frame(index=False)
     table = grid.merge(overall, on=["broad_area", "label_name", "length_stratum"], how="left")

@@ -28,6 +28,6 @@ for input in "$selection/summary.json" "$selection/candidate_membership.parquet"
 done
 
 "$python_bin" -m horus_benchmark.audit.prepare_selection_protocol \
-  --config configs/experiments/grouped_iid_layout_control_v1.yaml \
+  --config configs/experiments/grouped_iid_layout_control_v2.yaml \
   --selection "$selection" --raw "$raw" --n2-run "$n2" --n3-run "$n3" \
   --output "results/protocols/grouped-iid-layout-${SLURM_JOB_ID:?}"

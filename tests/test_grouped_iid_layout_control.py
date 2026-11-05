@@ -5,7 +5,8 @@ import pytest
 
 from horus_benchmark.audit.prepare_selection_protocol import layout_control_text
 from horus_benchmark.protocols.grouped_iid import (
-    add_strata, assign_groups, check_observed_pairs, split_diagnostics,
+    add_strata, assign_groups, assign_heldout_cv, check_observed_pairs,
+    split_diagnostics,
 )
 
 
@@ -42,6 +43,39 @@ def test_grouped_splits_cover_all_ids_without_observed_pair_leakage() -> None:
 
 def test_observed_pair_checker_rejects_cross_partition_pair() -> None:
     split = pd.DataFrame({"record_id": ["a", "b"], "split": ["train", "test"]})
+    pairs = pd.DataFrame({"left_record_id": ["a"], "right_record_id": ["b"]})
+    with pytest.raises(ValueError, match="cross splits"):
+        check_observed_pairs(split, pairs)
+
+
+def test_heldout_test_and_five_grouped_folds_are_disjoint_and_reproducible() -> None:
+    frame = _frame()
+    manifest = assign_heldout_cv(frame, test_fraction=.15, folds=5, seed=23)
+    assert len(manifest) == len(frame)
+    assert set(manifest.record_id) == set(frame.record_id)
+    assert set(manifest.split) == {"development", "test"}
+    assert set(manifest.loc[manifest.split.eq("development"), "fold"]) == set(range(5))
+    assert manifest.loc[manifest.split.eq("test"), "fold"].eq(-1).all()
+    assert manifest.groupby("probe_group_id").split.nunique().max() == 1
+    assert manifest.groupby("probe_group_id").fold.nunique().max() == 1
+    shuffled = assign_heldout_cv(frame.sample(frac=1, random_state=7), .15, 5, 23)
+    assert manifest.set_index("record_id")[["split", "fold"]].sort_index().equals(
+        shuffled.set_index("record_id")[["split", "fold"]].sort_index())
+    first = frame.iloc[0:2].record_id.tolist()
+    pairs = pd.DataFrame({"left_record_id": [first[0]], "right_record_id": [first[1]]})
+    assert check_observed_pairs(manifest, pairs)["observed_pairs_cross_split"] == 0
+    for fold in range(5):
+        validation = set(manifest.loc[manifest.fold.eq(fold), "record_id"])
+        train = set(manifest.loc[manifest.split.eq("development") &
+                                 manifest.fold.ne(fold), "record_id"])
+        test = set(manifest.loc[manifest.split.eq("test"), "record_id"])
+        assert not (train & validation or train & test or validation & test)
+        assert train | validation | test == set(frame.record_id)
+
+
+def test_observed_pair_checker_rejects_cross_fold_pair() -> None:
+    split = pd.DataFrame({"record_id": ["a", "b"], "split": ["development"] * 2,
+                          "fold": [0, 1]})
     pairs = pd.DataFrame({"left_record_id": ["a"], "right_record_id": ["b"]})
     with pytest.raises(ValueError, match="cross splits"):
         check_observed_pairs(split, pairs)
