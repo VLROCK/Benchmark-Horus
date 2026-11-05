@@ -38,6 +38,13 @@ def test_source_aware_holdout_folds_keep_ids_and_observed_pairs_together() -> No
     assert set(result.record_id) == set(frame.record_id)
     assert result.groupby("probe_group_id").split.nunique().max() == 1
     assert result.groupby("probe_group_id").fold.nunique().max() == 1
+    assert result.loc[result.split.eq("test"), "fold"].eq(-1).all()
+    assert result.loc[result.split.eq("development"), "fold"].between(0, 4).all()
+    shuffled = assign_heldout_cv(frame.sample(frac=1, random_state=21),
+                                 test_fraction=.15, folds=5, seed=9,
+                                 provenance_weight=1.0, material_min_rows=10)
+    assert (result.set_index("record_id")[["split", "fold"]].sort_index()
+            .equals(shuffled.set_index("record_id")[["split", "fold"]].sort_index()))
     pair = pd.DataFrame({"left_record_id": [frame.iloc[0].record_id],
                          "right_record_id": [frame.iloc[1].record_id]})
     assert check_observed_pairs(result, pair)["observed_pairs_cross_split"] == 0

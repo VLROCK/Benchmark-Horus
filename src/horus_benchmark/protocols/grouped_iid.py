@@ -134,7 +134,12 @@ def assign_heldout_cv(frame: pd.DataFrame, test_fraction: float, folds: int,
                               provenance_weight, material_min_rows)
     if set(outer.split) != {"development", "test"}:
         raise ValueError("Grouped holdout produced an empty partition")
-    development = outer.loc[outer.split.eq("development")].copy()
+    # The public split manifest omits provenance metadata. Build the second
+    # stage from the original rows so source/generator balancing remains active.
+    development_ids = set(outer.loc[outer.split.eq("development"), "record_id"])
+    development = frame.loc[frame.record_id.isin(development_ids)].copy()
+    if len(development) != len(development_ids):
+        raise AssertionError("Development IDs were not preserved for cross-validation")
     if development.probe_group_id.nunique() < folds:
         raise ValueError("Too few development groups for requested folds")
     names = tuple(f"fold_{index}" for index in range(folds))
