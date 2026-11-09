@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from horus_benchmark.audit.theme_common import ThemeContext, sha256_file
 from horus_benchmark.audit.theme_workflow import evaluate_fixed_pilot
@@ -90,4 +91,4 @@ def test_fixed_120_uses_all_shared_ids_without_human_threshold_search(
     assert report["model_vs_primary"]["accepted"] == 60
     assert report["model_vs_second"]["accepted"] == 60
     assert report["human_human_agreement"]["cohen_kappa_global"] == 1.0
-    assert report["human_human_agreement"]["cohen_kappa_area_stratified"] == 1.0
+    assert report["human_human_agreement"]["cohen_kappa_area_stratified"] == pytest.approx(1.0)
