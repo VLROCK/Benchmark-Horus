@@ -50,7 +50,7 @@ cd /home/victor.roquetto/Benchmark-Horus
 git pull
 PY="$HOME/miniconda3/envs/horus_theme/bin/python"
 "$PY" -m pip install -e '.[dev,theme]'
-"$PY" -m pytest tests/test_binary_detection_metrics.py tests/test_benchmark_runner.py tests/test_ood_manifests.py tests/test_text_baselines.py tests/test_bertimbau_baseline.py tests/test_summarize_benchmarks.py -q
+"$PY" -m pytest tests/test_binary_detection_metrics.py tests/test_benchmark_runner.py tests/test_ood_manifests.py tests/test_text_baselines.py tests/test_bertimbau_baseline.py tests/test_summarize_benchmarks.py tests/test_slurm_text_array.py -q
 mkdir -p results/logs results/tmp results/evaluation/n2-v1/plans
 ```
 
@@ -135,10 +135,11 @@ snapshot_download(
 PY
 ```
 
-Submeta as tarefas. O script divide planos em arrays de até 400 tarefas e limita a simultaneidade de cada array. Se houver quota global menor, ajuste o terceiro argumento. Preserve o diretório `runs` para que a agregação encontre todas as previsões:
+Submeta as tarefas. O script divide planos em arrays de até 400 tarefas, usa índices locais `0–399` no Slurm e passa o deslocamento do plano ao job; isso respeita clusters cujo `MaxArraySize` não aceita índices globais acima de 799. `HORUS_ARRAY_START` permite retomar um sufixo ainda não submetido e `HORUS_QOS` solicita um QOS explícito quando necessário. O terceiro argumento limita a simultaneidade **de cada array**, não o total de arrays. Preserve o diretório `runs` para que a agregação encontre todas as previsões:
 
 ```bash
 PLAN=results/evaluation/n2-v1/plans
+export HORUS_QOS=normal
 bash scripts/submit_text_evaluation_plan.sh "$PLAN/iid_cpu.csv" cpu 4
 bash scripts/submit_text_evaluation_plan.sh "$PLAN/iid_bert.csv" bert 1
 for PROTOCOL in logo lodo loso; do
@@ -169,12 +170,21 @@ raise SystemExit(1 if missing_total else 0)
 PY
 ```
 
-Para repetir um índice CPU faltante, substitua `logo_cpu.csv` e `INDICE` pelo plano e índice mostrados acima. Para um índice BERT, use o script `slurm_text_evaluation_bert.sh`:
+Para repetir um único índice faltante, use um array Slurm local de um elemento e passe o índice global em `HORUS_ARRAY_OFFSET`. Para BERT, substitua o script CPU pelo `slurm_text_evaluation_bert.sh`. O exemplo abaixo repete o índice 800 do LOSO CPU:
 
 ```bash
-PLAN=results/evaluation/n2-v1/plans/logo_cpu.csv
-INDICE=0
-sbatch --array="$INDICE" --export=ALL,HORUS_PLAN="$PLAN" scripts/slurm_text_evaluation_cpu.sh
+PLAN=results/evaluation/n2-v1/plans/loso_cpu.csv
+sbatch --qos=normal --array=0 \
+  --export=ALL,HORUS_PLAN="$PLAN",HORUS_ARRAY_OFFSET=800 \
+  scripts/slurm_text_evaluation_cpu.sh
+```
+
+Para retomar todos os índices `800–2159` ainda não submetidos do LOSO CPU, depois de confirmar que nenhum desses índices está ativo:
+
+```bash
+HORUS_QOS=normal HORUS_ARRAY_START=800 \
+  bash scripts/submit_text_evaluation_plan.sh \
+  results/evaluation/n2-v1/plans/loso_cpu.csv cpu 4
 ```
 
 Agregue métricas, ICs, ablação N2→N3s, tabelas por alvo/subgrupo e figuras:

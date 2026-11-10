@@ -41,11 +41,21 @@ chunk_size="${HORUS_ARRAY_CHUNK_SIZE:-400}"
   echo "HORUS_ARRAY_CHUNK_SIZE must be positive" >&2
   exit 2
 }
-for ((first = 0; first < count; first += chunk_size)); do
-  last=$((first + chunk_size - 1))
-  if ((last >= count)); then last=$((count - 1)); fi
-  job_id="$(sbatch --parsable --array="${first}-${last}%${concurrent}" \
-    --export=ALL,HORUS_PLAN="$plan" "$slurm_script")"
-  echo "Submitted $kind tasks ${first}-${last} of $((count - 1)): $job_id"
+start="${HORUS_ARRAY_START:-0}"
+[[ "$start" =~ ^(0|[1-9][0-9]*)$ ]] && ((start < count)) || {
+  echo "HORUS_ARRAY_START must be a plan index from 0 to $((count - 1))" >&2
+  exit 2
+}
+qos_args=()
+if [[ -n "${HORUS_QOS:-}" ]]; then qos_args=(--qos="$HORUS_QOS"); fi
+for ((first = start; first < count; first += chunk_size)); do
+  global_last=$((first + chunk_size - 1))
+  if ((global_last >= count)); then global_last=$((count - 1)); fi
+  local_last=$((global_last - first))
+  job_id="$(sbatch --parsable "${qos_args[@]}" \
+    --array="0-${local_last}%${concurrent}" \
+    --export=ALL,HORUS_PLAN="$plan",HORUS_ARRAY_OFFSET="$first" \
+    "$slurm_script")"
+  echo "Submitted $kind plan indices ${first}-${global_last} as Slurm 0-${local_last}: $job_id"
 done
 
