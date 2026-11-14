@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "task": {
+    "task_id": "21e59e1ff245ee5008ec",
+    "protocol": "loso",
+    "target": "projectoadamastor.org",
+    "seed": 20261106,
+    "fold": 0,
+    "model": "bertimbau",
+    "manifest_path": "results/protocols/ood-n2-v1/seed20261106/loso-projectoadamastor-org-57cdd0bc8f.parquet",
+    "manifest_sha256": "eb28c4ad43fdcdaa68e6b0c9a73422547cf41c0497b1ef55f610044615fa209f",
+    "counterfactual_n3s": false
+  },
+  "model_seed": 2895608551,
+  "input_hashes": {
+    "release_manifest": "929d0094a023b32db696b399f409649c9ad95a9e2cf21803dbb4495fe82a8a31",
+    "selected_texts": "66923ae507de39e1a219b3525877a658058a48c8d8e84df6cb166dfee519baef",
+    "task_manifest": "eb28c4ad43fdcdaa68e6b0c9a73422547cf41c0497b1ef55f610044615fa209f",
+    "evaluation_config": "255025dea4e24cc80886cacedf9e68d8a5ba8b837068f18276be54ffe31f33f0",
+    "model_config": "7562e8b1c5ea29b63a957bb33634a53cb21db4e129730626ad85510dbf575d95"
+  },
+  "counts": {
+    "train": 72846,
+    "validation": 18201,
+    "test_scored": 450,
+    "binary_test": 450,
+    "paired_binary_test": 68,
+    "unmatched_target": 0
+  },
+  "id_sha256": {
+    "train": "1bb121308f90ef82ee02cdb1ba4db52ababb0bef4ee3ae9b80db0c1670587ba7",
+    "validation": "d38b7c0c082c40b768a09180f2a82c505e3b419c5fa28e8e2a92f36ede4b4d65",
+    "test": "3147f397e306c31177481aa3c9c24c99f1263c938be355434cbe4240a34282fe"
+  },
+  "model_info": {
+    "model": {
+      "name": "neuralmind/bert-base-portuguese-cased",
+      "revision": "94d69c95f98f7d5b2a8700c420230ae10def0baa",
+      "max_length": 512,
+      "learning_rate": 2e-05,
+      "epochs": 3,
+      "train_batch_size": 16,
+      "inference_batch_size": 32,
+      "gradient_accumulation_steps": 2,
+      "weight_decay": 0.01,
+      "warmup_ratio": 0.1,
+      "max_grad_norm": 1.0,
+      "device": "cuda"
+    },
+    "resolved_revision": "94d69c95f98f7d5b2a8700c420230ae10def0baa",
+    "seed": 2895608551,
+    "positive_class": "synthetic",
+    "train_rows": 72846,
+    "validation_rows": 18201,
+    "test_rows": 450,
+    "train_class_rows": [
+      36420,
+      36426
+    ],
+    "total_optimizer_steps": 6831,
+    "warmup_steps": 684,
+    "best_epoch": 1,
+    "best_validation_loss": 0.013406277108201388,
+    "history": [
+      {
+        "epoch": 1,
+        "train_loss": 0.067789938948947,
+        "validation_loss": 0.013406277108201388
+      },
+      {
+        "epoch": 2,
+        "train_loss": 0.005965933370824291,
+        "validation_loss": 0.018942530776507874
+      },
+      {
+        "epoch": 3,
+        "train_loss": 0.0011593336291041859,
+        "validation_loss": 0.018713313347546594
+      }
+    ],
+    "token_coverage": {
+      "train": {
+        "rows": 72846,
+        "max_content_tokens": 510,
+        "truncated_rows": 40699,
+        "truncated_rate": 0.5586991735990995,
+        "retained_token_fraction": 0.5573475429371081,
+        "median_content_tokens": 600.0,
+        "p95_content_tokens": 1887.0,
+        "max_content_tokens_observed": 25686
+      },
+      "validation": {
+        "rows": 18201,
+        "max_content_tokens": 510,
+        "truncated_rows": 10178,
+        "truncated_rate": 0.5592000439536289,
+        "retained_token_fraction": 0.5562263678548769,
+        "median_content_tokens": 597.0,
+        "p95_content_tokens": 1903.0,
+        "max_content_tokens_observed": 6040
+      },
+      "test": {
+        "rows": 450,
+        "max_content_tokens": 510,
+        "truncated_rows": 256,
+        "truncated_rate": 0.5688888888888889,
+        "retained_token_fraction": 0.3607334379317612,
+        "median_content_tokens": 929.5,
+        "p95_content_tokens": 2778.0,
+        "max_content_tokens_observed": 3391
+      }
+    },
+    "torch": "2.8.0+cu128",
+    "transformers": "4.57.6",
+    "gpu": "NVIDIA L40S",
+    "checkpoint_sha256": "a716c418a7b6ff8b33e0159b8eb67b053c987865b692dea42d9d99392214ed77"
+  },
+  "evaluation": {
+    "validation_thresholds": {
+      "youden": 0.9475324153900146,
+      "fpr_0.01": 0.07113306224346161,
+      "fpr_0.05": 0.0009254624019376934
+    },
+    "metrics": {
+      "roc_auc": 0.9998814814814815,
+      "balanced_accuracy": 0.9844444444444445,
+      "tpr_at_fpr_0.01": 0.9955555555555555,
+      "observed_fpr_at_fpr_0.01": 0.0044444444444444444,
+      "balanced_accuracy_at_fpr_0.01": 0.9955555555555555,
+      "tpr_at_fpr_0.05": 1.0,
+      "observed_fpr_at_fpr_0.05": 0.19111111111111112,
+      "balanced_accuracy_at_fpr_0.05": 0.9044444444444444
+    },
+    "confidence_intervals_95": {
+      "roc_auc": [
+        0.9995846913580246,
+        1.0
+      ],
+      "balanced_accuracy": [
+        0.9733333333333334,
+        0.9955555555555555
+      ],
+      "tpr_at_fpr_0.01": [
+        0.9866666666666667,
+        1.0
+      ],
+      "observed_fpr_at_fpr_0.01": [
+        0.0,
+        0.013333333333333334
+      ],
+      "balanced_accuracy_at_fpr_0.01": [
+        0.9888888888888889,
+        1.0
+      ],
+      "tpr_at_fpr_0.05": [
+        1.0,
+        1.0
+      ],
+      "observed_fpr_at_fpr_0.05": [
+        0.14222222222222222,
+        0.24444444444444444
+      ],
+      "balanced_accuracy_at_fpr_0.05": [
+        0.8777777777777778,
+        0.9288888888888889
+      ]
+    },
+    "interval_note": "Conditional on fitted model and validation thresholds; whole probe_group_id resampled within label."
+  },
+  "paired_iid_test_metrics": {
+    "roc_auc": 1.0,
+    "balanced_accuracy": 1.0,
+    "tpr_at_fpr_0.01": 1.0,
+    "observed_fpr_at_fpr_0.01": 0.0,
+    "balanced_accuracy_at_fpr_0.01": 1.0,
+    "tpr_at_fpr_0.05": 1.0,
+    "observed_fpr_at_fpr_0.05": 0.08823529411764706,
+    "balanced_accuracy_at_fpr_0.05": 0.9558823529411764
+  },
+  "unmatched_target_rates": {},
+  "n3s_inference_only_metrics": null,
+  "predictions_sha256": "9a1b0b04e784a1dfa21eadea0a4f88ba40d3de7ebd3f828e8f353a160ef92d0a",
+  "warning": "Per-task test groups recur across folds and seeds; these intervals do not make rounds independent. OOD matched controls define the reported binary population."
+}

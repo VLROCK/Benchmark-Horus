@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "task": {
+    "task_id": "310e8e55c38779ef35a3",
+    "protocol": "loso",
+    "target": "receitas.ig.com.br",
+    "seed": 20261105,
+    "fold": 1,
+    "model": "surface_all",
+    "manifest_path": "results/protocols/ood-n2-v1/seed20261105/loso-receitas-ig-com-br-8fc54c06a8.parquet",
+    "manifest_sha256": "26c0cc130a6c2bfee5e025c5238af25480b9fbcf48146b5eb873a7b499e745f4",
+    "counterfactual_n3s": false
+  },
+  "model_seed": 298403311,
+  "input_hashes": {
+    "release_manifest": "929d0094a023b32db696b399f409649c9ad95a9e2cf21803dbb4495fe82a8a31",
+    "selected_texts": "66923ae507de39e1a219b3525877a658058a48c8d8e84df6cb166dfee519baef",
+    "task_manifest": "26c0cc130a6c2bfee5e025c5238af25480b9fbcf48146b5eb873a7b499e745f4",
+    "evaluation_config": "255025dea4e24cc80886cacedf9e68d8a5ba8b837068f18276be54ffe31f33f0",
+    "model_config": "7139099119a796aef25b537cf77c5310e3b6d8f03e46620caff818e770d1a445"
+  },
+  "counts": {
+    "train": 72967,
+    "validation": 18242,
+    "test_scored": 258,
+    "binary_test": 258,
+    "paired_binary_test": 38,
+    "unmatched_target": 0
+  },
+  "id_sha256": {
+    "train": "70c0973b7d252d071d4b8d5a8232a20295d20b0da4dd76394337934c09ca3aab",
+    "validation": "5ef370f45c0250b32010ecaaa3f3d5e0dcbb2f6353ff9b8a8146cd50e38d59c9",
+    "test": "f48286a72699105844503968f0e3d0667f7c44cd13c065ff2677bb60eb099caa"
+  },
+  "model_info": {
+    "selected_c": 10.0,
+    "inner_auc_by_c": {
+      "0.1": 0.9585839601930148,
+      "1.0": 0.9596445127959258,
+      "10.0": 0.9602519741449034
+    }
+  },
+  "evaluation": {
+    "validation_thresholds": {
+      "youden": 0.5530982689846458,
+      "fpr_0.01": 0.9265962973737473,
+      "fpr_0.05": 0.7338233879592296
+    },
+    "metrics": {
+      "roc_auc": 0.9983775013520821,
+      "balanced_accuracy": 0.9767441860465116,
+      "tpr_at_fpr_0.01": 0.7984496124031008,
+      "observed_fpr_at_fpr_0.01": 0.0,
+      "balanced_accuracy_at_fpr_0.01": 0.8992248062015504,
+      "tpr_at_fpr_0.05": 0.9069767441860465,
+      "observed_fpr_at_fpr_0.05": 0.0,
+      "balanced_accuracy_at_fpr_0.05": 0.9534883720930232
+    },
+    "confidence_intervals_95": {
+      "roc_auc": [
+        0.9953929577053626,
+        1.0
+      ],
+      "balanced_accuracy": [
+        0.9573643410852712,
+        0.9922480620155039
+      ],
+      "tpr_at_fpr_0.01": [
+        0.7286821705426356,
+        0.8604651162790697
+      ],
+      "observed_fpr_at_fpr_0.01": [
+        0.0,
+        0.0
+      ],
+      "balanced_accuracy_at_fpr_0.01": [
+        0.8643410852713178,
+        0.9302325581395349
+      ],
+      "tpr_at_fpr_0.05": [
+        0.8527131782945736,
+        0.9534883720930233
+      ],
+      "observed_fpr_at_fpr_0.05": [
+        0.0,
+        0.0
+      ],
+      "balanced_accuracy_at_fpr_0.05": [
+        0.9263565891472868,
+        0.9767441860465116
+      ]
+    },
+    "interval_note": "Conditional on fitted model and validation thresholds; whole probe_group_id resampled within label."
+  },
+  "paired_iid_test_metrics": {
+    "roc_auc": 0.997229916897507,
+    "balanced_accuracy": 0.9473684210526316,
+    "tpr_at_fpr_0.01": 0.7894736842105263,
+    "observed_fpr_at_fpr_0.01": 0.0,
+    "balanced_accuracy_at_fpr_0.01": 0.8947368421052632,
+    "tpr_at_fpr_0.05": 0.8421052631578947,
+    "observed_fpr_at_fpr_0.05": 0.0,
+    "balanced_accuracy_at_fpr_0.05": 0.9210526315789473
+  },
+  "unmatched_target_rates": {},
+  "n3s_inference_only_metrics": null,
+  "predictions_sha256": "b6be32c000ca2658ada3e44b85d3ea327fe603f064b38a18140e1e20be36edf9",
+  "warning": "Per-task test groups recur across folds and seeds; these intervals do not make rounds independent. OOD matched controls define the reported binary population."
+}

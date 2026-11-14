@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "task": {
+    "task_id": "c1c1e1aedb805dc599ee",
+    "protocol": "iid",
+    "target": "all",
+    "seed": 20261107,
+    "fold": 3,
+    "model": "human_iforest",
+    "manifest_path": "results/releases/horus-n2-iid-v1/split_seed20261107.parquet",
+    "manifest_sha256": "f78fbbcd6a9bbfa51a52bf20f0e953fc64b7f196c5a186665b0cd290af3ab8ee",
+    "counterfactual_n3s": true
+  },
+  "model_seed": 3983455790,
+  "input_hashes": {
+    "release_manifest": "929d0094a023b32db696b399f409649c9ad95a9e2cf21803dbb4495fe82a8a31",
+    "selected_texts": "66923ae507de39e1a219b3525877a658058a48c8d8e84df6cb166dfee519baef",
+    "task_manifest": "f78fbbcd6a9bbfa51a52bf20f0e953fc64b7f196c5a186665b0cd290af3ab8ee",
+    "evaluation_config": "255025dea4e24cc80886cacedf9e68d8a5ba8b837068f18276be54ffe31f33f0",
+    "model_config": "7139099119a796aef25b537cf77c5310e3b6d8f03e46620caff818e770d1a445"
+  },
+  "counts": {
+    "train": 73142,
+    "validation": 18287,
+    "test_scored": 16137,
+    "binary_test": 16137,
+    "paired_binary_test": 16137,
+    "unmatched_target": 0
+  },
+  "id_sha256": {
+    "train": "bff7864f57388ff1f2e10f70bd71f800b4a02cc329208785b036002acd32485b",
+    "validation": "d713a6bcb8700e4b25eeba77c3e2b1452ff8701a010848978d067db13ef95a8a",
+    "test": "1f4cbf4cd2a7847a620c6b0665a6cfb92c4fd1b043029c58d254167c8747808f"
+  },
+  "model_info": {
+    "selected_c": null,
+    "inner_auc_by_c": {}
+  },
+  "evaluation": {
+    "validation_thresholds": {
+      "youden": -0.17215930585480427,
+      "fpr_0.01": -0.06709064515042523,
+      "fpr_0.05": -0.0963656423342778
+    },
+    "metrics": {
+      "roc_auc": 0.3213818065098294,
+      "balanced_accuracy": 0.5003098968594681,
+      "tpr_at_fpr_0.01": 0.0,
+      "observed_fpr_at_fpr_0.01": 0.0038423401090728806,
+      "balanced_accuracy_at_fpr_0.01": 0.49807882994546354,
+      "tpr_at_fpr_0.05": 0.0,
+      "observed_fpr_at_fpr_0.05": 0.019335647000495785,
+      "balanced_accuracy_at_fpr_0.05": 0.4903321764997521
+    },
+    "confidence_intervals_95": {
+      "roc_auc": [
+        0.3134302620009016,
+        0.3295637625480233
+      ],
+      "balanced_accuracy": [
+        0.4998760996273281,
+        0.5007436940916081
+      ],
+      "tpr_at_fpr_0.01": [
+        0.0,
+        0.0
+      ],
+      "observed_fpr_at_fpr_0.01": [
+        0.0026028755577590483,
+        0.005205751115518097
+      ],
+      "balanced_accuracy_at_fpr_0.01": [
+        0.49739712444224093,
+        0.49869856222112047
+      ],
+      "tpr_at_fpr_0.05": [
+        0.0,
+        0.0
+      ],
+      "observed_fpr_at_fpr_0.05": [
+        0.01636093207734259,
+        0.022682201289043132
+      ],
+      "balanced_accuracy_at_fpr_0.05": [
+        0.48865889935547846,
+        0.4918195339613287
+      ]
+    },
+    "interval_note": "Conditional on fitted model and validation thresholds; whole probe_group_id resampled within label."
+  },
+  "paired_iid_test_metrics": {
+    "roc_auc": 0.3213818065098294,
+    "balanced_accuracy": 0.5003098968594681,
+    "tpr_at_fpr_0.01": 0.0,
+    "observed_fpr_at_fpr_0.01": 0.0038423401090728806,
+    "balanced_accuracy_at_fpr_0.01": 0.49807882994546354,
+    "tpr_at_fpr_0.05": 0.0,
+    "observed_fpr_at_fpr_0.05": 0.019335647000495785,
+    "balanced_accuracy_at_fpr_0.05": 0.4903321764997521
+  },
+  "unmatched_target_rates": {},
+  "n3s_inference_only_metrics": {
+    "roc_auc": 0.32141642979770474,
+    "balanced_accuracy": 0.5003098968594681,
+    "tpr_at_fpr_0.01": 0.0,
+    "observed_fpr_at_fpr_0.01": 0.0038423401090728806,
+    "balanced_accuracy_at_fpr_0.01": 0.49807882994546354,
+    "tpr_at_fpr_0.05": 0.0,
+    "observed_fpr_at_fpr_0.05": 0.019335647000495785,
+    "balanced_accuracy_at_fpr_0.05": 0.4903321764997521
+  },
+  "predictions_sha256": "ea40e4dc05ae6f52bcc81d33cdc2a662ba2d11b9c0b0ee9ab19322f19adb9c5d",
+  "warning": "Per-task test groups recur across folds and seeds; these intervals do not make rounds independent. OOD matched controls define the reported binary population."
+}

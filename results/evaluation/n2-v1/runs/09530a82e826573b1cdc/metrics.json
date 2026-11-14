@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "task": {
+    "task_id": "09530a82e826573b1cdc",
+    "protocol": "loso",
+    "target": "www.dicasdemulher.com.br",
+    "seed": 20261105,
+    "fold": 3,
+    "model": "char4_svm",
+    "manifest_path": "results/protocols/ood-n2-v1/seed20261105/loso-www-dicasdemulher-com-br-7dddd7d046.parquet",
+    "manifest_sha256": "82e6ac9d0c15b794348ebe80dd0ebf60c67d0a945256f2b1fe0caa44c9c6f3dc",
+    "counterfactual_n3s": false
+  },
+  "model_seed": 3105817397,
+  "input_hashes": {
+    "release_manifest": "929d0094a023b32db696b399f409649c9ad95a9e2cf21803dbb4495fe82a8a31",
+    "selected_texts": "66923ae507de39e1a219b3525877a658058a48c8d8e84df6cb166dfee519baef",
+    "task_manifest": "82e6ac9d0c15b794348ebe80dd0ebf60c67d0a945256f2b1fe0caa44c9c6f3dc",
+    "evaluation_config": "255025dea4e24cc80886cacedf9e68d8a5ba8b837068f18276be54ffe31f33f0",
+    "model_config": "7139099119a796aef25b537cf77c5310e3b6d8f03e46620caff818e770d1a445"
+  },
+  "counts": {
+    "train": 72868,
+    "validation": 18225,
+    "test_scored": 396,
+    "binary_test": 396,
+    "paired_binary_test": 60,
+    "unmatched_target": 0
+  },
+  "id_sha256": {
+    "train": "6fedcfa0082a7f0ff0292f42e67caca7700eeb5c13f3431bb592388b23a4232b",
+    "validation": "701ffab65d43b7bcc6fe622f35810592cd048e86a6d53995e20dcb3037e41785",
+    "test": "b6302db2835fb1ce3d1c83af2488e1e0e36329407603eff2de8df0be8964ec16"
+  },
+  "model_info": {
+    "selected_c": 1.0,
+    "inner_auc_by_c": {
+      "0.1": 0.9997834961456112,
+      "1.0": 0.999847962658591,
+      "10.0": 0.9998331334501684
+    }
+  },
+  "evaluation": {
+    "validation_thresholds": {
+      "youden": -0.12973974207972883,
+      "fpr_0.01": -0.24972506777158582,
+      "fpr_0.05": -0.6636072673172828
+    },
+    "metrics": {
+      "roc_auc": 1.0,
+      "balanced_accuracy": 1.0,
+      "tpr_at_fpr_0.01": 1.0,
+      "observed_fpr_at_fpr_0.01": 0.0,
+      "balanced_accuracy_at_fpr_0.01": 1.0,
+      "tpr_at_fpr_0.05": 1.0,
+      "observed_fpr_at_fpr_0.05": 0.04040404040404041,
+      "balanced_accuracy_at_fpr_0.05": 0.9797979797979798
+    },
+    "confidence_intervals_95": {
+      "roc_auc": [
+        0.9999999999999999,
+        1.0
+      ],
+      "balanced_accuracy": [
+        1.0,
+        1.0
+      ],
+      "tpr_at_fpr_0.01": [
+        1.0,
+        1.0
+      ],
+      "observed_fpr_at_fpr_0.01": [
+        0.0,
+        0.0
+      ],
+      "balanced_accuracy_at_fpr_0.01": [
+        1.0,
+        1.0
+      ],
+      "tpr_at_fpr_0.05": [
+        1.0,
+        1.0
+      ],
+      "observed_fpr_at_fpr_0.05": [
+        0.014561347966793306,
+        0.07292621073298425
+      ],
+      "balanced_accuracy_at_fpr_0.05": [
+        0.9635368946335079,
+        0.9927193260166034
+      ]
+    },
+    "interval_note": "Conditional on fitted model and validation thresholds; whole probe_group_id resampled within label."
+  },
+  "paired_iid_test_metrics": {
+    "roc_auc": 1.0,
+    "balanced_accuracy": 1.0,
+    "tpr_at_fpr_0.01": 1.0,
+    "observed_fpr_at_fpr_0.01": 0.0,
+    "balanced_accuracy_at_fpr_0.01": 1.0,
+    "tpr_at_fpr_0.05": 1.0,
+    "observed_fpr_at_fpr_0.05": 0.1,
+    "balanced_accuracy_at_fpr_0.05": 0.95
+  },
+  "unmatched_target_rates": {},
+  "n3s_inference_only_metrics": null,
+  "predictions_sha256": "7b79790dd68fae9c3903a12f2a2cafe19c55598ee4e9552e6584089f2060210d",
+  "warning": "Per-task test groups recur across folds and seeds; these intervals do not make rounds independent. OOD matched controls define the reported binary population."
+}

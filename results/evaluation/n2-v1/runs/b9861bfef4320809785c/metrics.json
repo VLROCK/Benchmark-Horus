@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "task": {
+    "task_id": "b9861bfef4320809785c",
+    "protocol": "loso",
+    "target": "www.techtudo.com.br",
+    "seed": 20261105,
+    "fold": 2,
+    "model": "char4_svm",
+    "manifest_path": "results/protocols/ood-n2-v1/seed20261105/loso-www-techtudo-com-br-e77dc9da2d.parquet",
+    "manifest_sha256": "1c6e345616bf56db82bc933584547695fd24cf057e0a6a7f916ff844fdcd8bc3",
+    "counterfactual_n3s": false
+  },
+  "model_seed": 4031580061,
+  "input_hashes": {
+    "release_manifest": "929d0094a023b32db696b399f409649c9ad95a9e2cf21803dbb4495fe82a8a31",
+    "selected_texts": "66923ae507de39e1a219b3525877a658058a48c8d8e84df6cb166dfee519baef",
+    "task_manifest": "1c6e345616bf56db82bc933584547695fd24cf057e0a6a7f916ff844fdcd8bc3",
+    "evaluation_config": "255025dea4e24cc80886cacedf9e68d8a5ba8b837068f18276be54ffe31f33f0",
+    "model_config": "7139099119a796aef25b537cf77c5310e3b6d8f03e46620caff818e770d1a445"
+  },
+  "counts": {
+    "train": 72930,
+    "validation": 18221,
+    "test_scored": 328,
+    "binary_test": 328,
+    "paired_binary_test": 50,
+    "unmatched_target": 0
+  },
+  "id_sha256": {
+    "train": "c21e142ce9dc61c6b76a32328e259a979b1548871d02eed96a43b013c3da7870",
+    "validation": "bb62e7e32755f4f42bcc597da9c6041593acc875500e7d9b69e575652ce10365",
+    "test": "5a93cc08ef67bef6ab2426f0c45f5d2e6bcb95b3c1824d22d439853bd5bbb64b"
+  },
+  "model_info": {
+    "selected_c": 1.0,
+    "inner_auc_by_c": {
+      "0.1": 0.9997858470780004,
+      "1.0": 0.9998581773084825,
+      "10.0": 0.9998473398172412
+    }
+  },
+  "evaluation": {
+    "validation_thresholds": {
+      "youden": -0.01999010524008593,
+      "fpr_0.01": -0.18562696841843612,
+      "fpr_0.05": -0.6334129474720339
+    },
+    "metrics": {
+      "roc_auc": 1.0,
+      "balanced_accuracy": 1.0,
+      "tpr_at_fpr_0.01": 1.0,
+      "observed_fpr_at_fpr_0.01": 0.0,
+      "balanced_accuracy_at_fpr_0.01": 1.0,
+      "tpr_at_fpr_0.05": 1.0,
+      "observed_fpr_at_fpr_0.05": 0.006097560975609756,
+      "balanced_accuracy_at_fpr_0.05": 0.9969512195121951
+    },
+    "confidence_intervals_95": {
+      "roc_auc": [
+        0.9999999999999999,
+        1.0
+      ],
+      "balanced_accuracy": [
+        1.0,
+        1.0
+      ],
+      "tpr_at_fpr_0.01": [
+        1.0,
+        1.0
+      ],
+      "observed_fpr_at_fpr_0.01": [
+        0.0,
+        0.0
+      ],
+      "balanced_accuracy_at_fpr_0.01": [
+        1.0,
+        1.0
+      ],
+      "tpr_at_fpr_0.05": [
+        1.0,
+        1.0
+      ],
+      "observed_fpr_at_fpr_0.05": [
+        0.0,
+        0.01875
+      ],
+      "balanced_accuracy_at_fpr_0.05": [
+        0.990625,
+        1.0
+      ]
+    },
+    "interval_note": "Conditional on fitted model and validation thresholds; whole probe_group_id resampled within label."
+  },
+  "paired_iid_test_metrics": {
+    "roc_auc": 1.0,
+    "balanced_accuracy": 1.0,
+    "tpr_at_fpr_0.01": 1.0,
+    "observed_fpr_at_fpr_0.01": 0.0,
+    "balanced_accuracy_at_fpr_0.01": 1.0,
+    "tpr_at_fpr_0.05": 1.0,
+    "observed_fpr_at_fpr_0.05": 0.0,
+    "balanced_accuracy_at_fpr_0.05": 1.0
+  },
+  "unmatched_target_rates": {},
+  "n3s_inference_only_metrics": null,
+  "predictions_sha256": "c82a7bc32b1234de7fc52a9b6638032c37c816529baf6a76694f88de3b5b2aaf",
+  "warning": "Per-task test groups recur across folds and seeds; these intervals do not make rounds independent. OOD matched controls define the reported binary population."
+}

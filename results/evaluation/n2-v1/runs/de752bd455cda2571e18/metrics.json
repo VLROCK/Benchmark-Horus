@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "task": {
+    "task_id": "de752bd455cda2571e18",
+    "protocol": "logo",
+    "target": "sabia_4",
+    "seed": 20261105,
+    "fold": 0,
+    "model": "bertimbau",
+    "manifest_path": "results/protocols/ood-n2-v1/seed20261105/logo-sabia-4-08e0e365e2.parquet",
+    "manifest_sha256": "9f99a9cb1df66818d083a3624cda078ec66ea06112f4ecb8694ddd8eaf640603",
+    "counterfactual_n3s": false
+  },
+  "model_seed": 1080264533,
+  "input_hashes": {
+    "release_manifest": "929d0094a023b32db696b399f409649c9ad95a9e2cf21803dbb4495fe82a8a31",
+    "selected_texts": "66923ae507de39e1a219b3525877a658058a48c8d8e84df6cb166dfee519baef",
+    "task_manifest": "9f99a9cb1df66818d083a3624cda078ec66ea06112f4ecb8694ddd8eaf640603",
+    "evaluation_config": "255025dea4e24cc80886cacedf9e68d8a5ba8b837068f18276be54ffe31f33f0",
+    "model_config": "7562e8b1c5ea29b63a957bb33634a53cb21db4e129730626ad85510dbf575d95"
+  },
+  "counts": {
+    "train": 66504,
+    "validation": 16631,
+    "test_scored": 8020,
+    "binary_test": 8020,
+    "paired_binary_test": 1201,
+    "unmatched_target": 0
+  },
+  "id_sha256": {
+    "train": "82107eb489ff09331d08ed71882e093ae4bca7c0f7b9f5482c875c6ef8d1b375",
+    "validation": "6ae2fbe1fd38816a8b9f22568aaf8cca39f6e753dab7ff567eb702619d248ad7",
+    "test": "2f15c749c19c7de5889aea595969babc3f075a3fe8bdff7fa400cb03ab142a39"
+  },
+  "model_info": {
+    "model": {
+      "name": "neuralmind/bert-base-portuguese-cased",
+      "revision": "94d69c95f98f7d5b2a8700c420230ae10def0baa",
+      "max_length": 512,
+      "learning_rate": 2e-05,
+      "epochs": 3,
+      "train_batch_size": 16,
+      "inference_batch_size": 32,
+      "gradient_accumulation_steps": 2,
+      "weight_decay": 0.01,
+      "warmup_ratio": 0.1,
+      "max_grad_norm": 1.0,
+      "device": "cuda"
+    },
+    "resolved_revision": "94d69c95f98f7d5b2a8700c420230ae10def0baa",
+    "seed": 1080264533,
+    "positive_class": "synthetic",
+    "train_rows": 66504,
+    "validation_rows": 16631,
+    "test_rows": 8020,
+    "train_class_rows": [
+      32659,
+      33845
+    ],
+    "total_optimizer_steps": 6237,
+    "warmup_steps": 624,
+    "best_epoch": 3,
+    "best_validation_loss": 0.012318145060402826,
+    "history": [
+      {
+        "epoch": 1,
+        "train_loss": 0.07308930243358268,
+        "validation_loss": 0.025805553727889716
+      },
+      {
+        "epoch": 2,
+        "train_loss": 0.0056651243534229625,
+        "validation_loss": 0.014890659153087241
+      },
+      {
+        "epoch": 3,
+        "train_loss": 0.000634794827443533,
+        "validation_loss": 0.012318145060402826
+      }
+    ],
+    "token_coverage": {
+      "train": {
+        "rows": 66504,
+        "max_content_tokens": 510,
+        "truncated_rows": 36605,
+        "truncated_rate": 0.5504180199687236,
+        "retained_token_fraction": 0.572743683133045,
+        "median_content_tokens": 585.0,
+        "p95_content_tokens": 1812.8499999999985,
+        "max_content_tokens_observed": 25686
+      },
+      "validation": {
+        "rows": 16631,
+        "max_content_tokens": 510,
+        "truncated_rows": 9199,
+        "truncated_rate": 0.5531236846852264,
+        "retained_token_fraction": 0.5688215349776742,
+        "median_content_tokens": 589.0,
+        "p95_content_tokens": 1861.0,
+        "max_content_tokens_observed": 8807
+      },
+      "test": {
+        "rows": 8020,
+        "max_content_tokens": 510,
+        "truncated_rows": 4784,
+        "truncated_rate": 0.5965087281795511,
+        "retained_token_fraction": 0.4589031080704194,
+        "median_content_tokens": 716.0,
+        "p95_content_tokens": 2359.0499999999993,
+        "max_content_tokens_observed": 4662
+      }
+    },
+    "torch": "2.8.0+cu128",
+    "transformers": "4.57.6",
+    "gpu": "NVIDIA L40S",
+    "checkpoint_sha256": "d1ee3c4fa0f63395b3addea8fe96ffa2f4f7aa7677fa5c75ed849429a6b9fc6c"
+  },
+  "evaluation": {
+    "validation_thresholds": {
+      "youden": 0.9997355341911316,
+      "fpr_0.01": 0.0017524510622024536,
+      "fpr_0.05": 3.161145650665276e-05
+    },
+    "metrics": {
+      "roc_auc": 0.9999985074719685,
+      "balanced_accuracy": 0.9996259351620949,
+      "tpr_at_fpr_0.01": 1.0,
+      "observed_fpr_at_fpr_0.01": 0.010723192019950124,
+      "balanced_accuracy_at_fpr_0.01": 0.9946384039900249,
+      "tpr_at_fpr_0.05": 1.0,
+      "observed_fpr_at_fpr_0.05": 0.04064837905236908,
+      "balanced_accuracy_at_fpr_0.05": 0.9796758104738155
+    },
+    "confidence_intervals_95": {
+      "roc_auc": [
+        0.999995800491637,
+        1.0
+      ],
+      "balanced_accuracy": [
+        0.9991299030468588,
+        1.0
+      ],
+      "tpr_at_fpr_0.01": [
+        1.0,
+        1.0
+      ],
+      "observed_fpr_at_fpr_0.01": [
+        0.007644647488656588,
+        0.013920583634624293
+      ],
+      "balanced_accuracy_at_fpr_0.01": [
+        0.9930397081826879,
+        0.9961776762556717
+      ],
+      "tpr_at_fpr_0.05": [
+        1.0,
+        1.0
+      ],
+      "observed_fpr_at_fpr_0.05": [
+        0.03497867463488554,
+        0.04699159360756868
+      ],
+      "balanced_accuracy_at_fpr_0.05": [
+        0.9765042031962156,
+        0.9825106626825573
+      ]
+    },
+    "interval_note": "Conditional on fitted model and validation thresholds; whole probe_group_id resampled within label."
+  },
+  "paired_iid_test_metrics": {
+    "roc_auc": 1.0,
+    "balanced_accuracy": 1.0,
+    "tpr_at_fpr_0.01": 1.0,
+    "observed_fpr_at_fpr_0.01": 0.015,
+    "balanced_accuracy_at_fpr_0.01": 0.9924999999999999,
+    "tpr_at_fpr_0.05": 1.0,
+    "observed_fpr_at_fpr_0.05": 0.041666666666666664,
+    "balanced_accuracy_at_fpr_0.05": 0.9791666666666667
+  },
+  "unmatched_target_rates": {},
+  "n3s_inference_only_metrics": null,
+  "predictions_sha256": "e9956806775e966fece08788668e306c690415fd80edbaf2fe7c6676313a8e5e",
+  "warning": "Per-task test groups recur across folds and seeds; these intervals do not make rounds independent. OOD matched controls define the reported binary population."
+}

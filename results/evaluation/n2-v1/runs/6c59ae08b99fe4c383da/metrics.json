@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "task": {
+    "task_id": "6c59ae08b99fe4c383da",
+    "protocol": "loso",
+    "target": "tecmundo.com.br",
+    "seed": 20261105,
+    "fold": 0,
+    "model": "bertimbau",
+    "manifest_path": "results/protocols/ood-n2-v1/seed20261105/loso-tecmundo-com-br-48691421c3.parquet",
+    "manifest_sha256": "fcb19816e8be12d5579a01f9e7ffb7ea8afaa9f89dfa20a08f39f441e7117b62",
+    "counterfactual_n3s": false
+  },
+  "model_seed": 1080264533,
+  "input_hashes": {
+    "release_manifest": "929d0094a023b32db696b399f409649c9ad95a9e2cf21803dbb4495fe82a8a31",
+    "selected_texts": "66923ae507de39e1a219b3525877a658058a48c8d8e84df6cb166dfee519baef",
+    "task_manifest": "fcb19816e8be12d5579a01f9e7ffb7ea8afaa9f89dfa20a08f39f441e7117b62",
+    "evaluation_config": "255025dea4e24cc80886cacedf9e68d8a5ba8b837068f18276be54ffe31f33f0",
+    "model_config": "7562e8b1c5ea29b63a957bb33634a53cb21db4e129730626ad85510dbf575d95"
+  },
+  "counts": {
+    "train": 72894,
+    "validation": 18221,
+    "test_scored": 376,
+    "binary_test": 376,
+    "paired_binary_test": 62,
+    "unmatched_target": 0
+  },
+  "id_sha256": {
+    "train": "aa8011303b62638e417a1b24a30ed1baacacedb152ba72e2a0cbc12561cf455d",
+    "validation": "56e1d444d9dc20d3153d5d3aeaae2c40d29aa9630fee2f49fcb80f81ebd3b591",
+    "test": "e88147cc45c430688a12034b727b3ae30efc6aaeadb5ba7fa7f57cce1ee158a3"
+  },
+  "model_info": {
+    "model": {
+      "name": "neuralmind/bert-base-portuguese-cased",
+      "revision": "94d69c95f98f7d5b2a8700c420230ae10def0baa",
+      "max_length": 512,
+      "learning_rate": 2e-05,
+      "epochs": 3,
+      "train_batch_size": 16,
+      "inference_batch_size": 32,
+      "gradient_accumulation_steps": 2,
+      "weight_decay": 0.01,
+      "warmup_ratio": 0.1,
+      "max_grad_norm": 1.0,
+      "device": "cuda"
+    },
+    "resolved_revision": "94d69c95f98f7d5b2a8700c420230ae10def0baa",
+    "seed": 1080264533,
+    "positive_class": "synthetic",
+    "train_rows": 72894,
+    "validation_rows": 18221,
+    "test_rows": 376,
+    "train_class_rows": [
+      36444,
+      36450
+    ],
+    "total_optimizer_steps": 6834,
+    "warmup_steps": 684,
+    "best_epoch": 1,
+    "best_validation_loss": 0.007856545962509207,
+    "history": [
+      {
+        "epoch": 1,
+        "train_loss": 0.06910340330676218,
+        "validation_loss": 0.007856545962509207
+      },
+      {
+        "epoch": 2,
+        "train_loss": 0.00496532630413346,
+        "validation_loss": 0.029384922107906743
+      },
+      {
+        "epoch": 3,
+        "train_loss": 0.00043476052968980283,
+        "validation_loss": 0.019958605808869233
+      }
+    ],
+    "token_coverage": {
+      "train": {
+        "rows": 72894,
+        "max_content_tokens": 510,
+        "truncated_rows": 40647,
+        "truncated_rate": 0.5576179109391719,
+        "retained_token_fraction": 0.5568053034806362,
+        "median_content_tokens": 598.0,
+        "p95_content_tokens": 1889.3499999999913,
+        "max_content_tokens_observed": 25686
+      },
+      "validation": {
+        "rows": 18221,
+        "max_content_tokens": 510,
+        "truncated_rows": 10200,
+        "truncated_rate": 0.5597936446956808,
+        "retained_token_fraction": 0.5557413050198603,
+        "median_content_tokens": 600.0,
+        "p95_content_tokens": 1916.0,
+        "max_content_tokens_observed": 8807
+      },
+      "test": {
+        "rows": 376,
+        "max_content_tokens": 510,
+        "truncated_rows": 324,
+        "truncated_rate": 0.8617021276595744,
+        "retained_token_fraction": 0.495689998354556,
+        "median_content_tokens": 898.0,
+        "p95_content_tokens": 2014.25,
+        "max_content_tokens_observed": 3128
+      }
+    },
+    "torch": "2.8.0+cu128",
+    "transformers": "4.57.6",
+    "gpu": "NVIDIA L40S",
+    "checkpoint_sha256": "353f1d08c2e034b00a2332b3f6596619a1cb64f81e556c23d0cb95f16af495e1"
+  },
+  "evaluation": {
+    "validation_thresholds": {
+      "youden": 0.3372373878955841,
+      "fpr_0.01": 0.0004638207028619945,
+      "fpr_0.05": 0.00010015336738433689
+    },
+    "metrics": {
+      "roc_auc": 0.9999999999999999,
+      "balanced_accuracy": 0.9973404255319149,
+      "tpr_at_fpr_0.01": 1.0,
+      "observed_fpr_at_fpr_0.01": 0.010638297872340425,
+      "balanced_accuracy_at_fpr_0.01": 0.9946808510638299,
+      "tpr_at_fpr_0.05": 1.0,
+      "observed_fpr_at_fpr_0.05": 0.0851063829787234,
+      "balanced_accuracy_at_fpr_0.05": 0.9574468085106382
+    },
+    "confidence_intervals_95": {
+      "roc_auc": [
+        0.9999999999999999,
+        1.0
+      ],
+      "balanced_accuracy": [
+        0.9917582417582418,
+        1.0
+      ],
+      "tpr_at_fpr_0.01": [
+        1.0,
+        1.0
+      ],
+      "observed_fpr_at_fpr_0.01": [
+        0.0,
+        0.02717391304347826
+      ],
+      "balanced_accuracy_at_fpr_0.01": [
+        0.9864130434782609,
+        1.0
+      ],
+      "tpr_at_fpr_0.05": [
+        1.0,
+        1.0
+      ],
+      "observed_fpr_at_fpr_0.05": [
+        0.04712041884816754,
+        0.1285131604547096
+      ],
+      "balanced_accuracy_at_fpr_0.05": [
+        0.9357434197726452,
+        0.9764397905759162
+      ]
+    },
+    "interval_note": "Conditional on fitted model and validation thresholds; whole probe_group_id resampled within label."
+  },
+  "paired_iid_test_metrics": {
+    "roc_auc": 1.0,
+    "balanced_accuracy": 0.9838709677419355,
+    "tpr_at_fpr_0.01": 1.0,
+    "observed_fpr_at_fpr_0.01": 0.03225806451612903,
+    "balanced_accuracy_at_fpr_0.01": 0.9838709677419355,
+    "tpr_at_fpr_0.05": 1.0,
+    "observed_fpr_at_fpr_0.05": 0.06451612903225806,
+    "balanced_accuracy_at_fpr_0.05": 0.967741935483871
+  },
+  "unmatched_target_rates": {},
+  "n3s_inference_only_metrics": null,
+  "predictions_sha256": "30757e60f7a69e97965d70f344222f8e734f4f176c6cbce0a2481a6099332ec4",
+  "warning": "Per-task test groups recur across folds and seeds; these intervals do not make rounds independent. OOD matched controls define the reported binary population."
+}

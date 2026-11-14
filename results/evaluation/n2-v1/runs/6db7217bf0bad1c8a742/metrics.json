@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "task": {
+    "task_id": "6db7217bf0bad1c8a742",
+    "protocol": "loso",
+    "target": "Revista Berro",
+    "seed": 20261107,
+    "fold": 0,
+    "model": "bertimbau",
+    "manifest_path": "results/protocols/ood-n2-v1/seed20261107/loso-revista-berro-2ea5344180.parquet",
+    "manifest_sha256": "256e530f4069451a0a6780827b8eff0cf06dc969e469368e07587254aa001ec8",
+    "counterfactual_n3s": false
+  },
+  "model_seed": 2170551575,
+  "input_hashes": {
+    "release_manifest": "929d0094a023b32db696b399f409649c9ad95a9e2cf21803dbb4495fe82a8a31",
+    "selected_texts": "66923ae507de39e1a219b3525877a658058a48c8d8e84df6cb166dfee519baef",
+    "task_manifest": "256e530f4069451a0a6780827b8eff0cf06dc969e469368e07587254aa001ec8",
+    "evaluation_config": "255025dea4e24cc80886cacedf9e68d8a5ba8b837068f18276be54ffe31f33f0",
+    "model_config": "7562e8b1c5ea29b63a957bb33634a53cb21db4e129730626ad85510dbf575d95"
+  },
+  "counts": {
+    "train": 72506,
+    "validation": 18123,
+    "test_scored": 940,
+    "binary_test": 940,
+    "paired_binary_test": 140,
+    "unmatched_target": 0
+  },
+  "id_sha256": {
+    "train": "3e2ff6b2bf9d4d73ffb1848a0cebaab6e24c7beaf2aa9fcf9f32d2721e703e34",
+    "validation": "52f452e38c9e615c87ca8a13444d01c067eff816637d9945b4a556d83b9ee0d3",
+    "test": "cc58d8bc5f71c39af7cc147a1b59994b679c3516acff40b11c71f56b2e1e6024"
+  },
+  "model_info": {
+    "model": {
+      "name": "neuralmind/bert-base-portuguese-cased",
+      "revision": "94d69c95f98f7d5b2a8700c420230ae10def0baa",
+      "max_length": 512,
+      "learning_rate": 2e-05,
+      "epochs": 3,
+      "train_batch_size": 16,
+      "inference_batch_size": 32,
+      "gradient_accumulation_steps": 2,
+      "weight_decay": 0.01,
+      "warmup_ratio": 0.1,
+      "max_grad_norm": 1.0,
+      "device": "cuda"
+    },
+    "resolved_revision": "94d69c95f98f7d5b2a8700c420230ae10def0baa",
+    "seed": 2170551575,
+    "positive_class": "synthetic",
+    "train_rows": 72506,
+    "validation_rows": 18123,
+    "test_rows": 940,
+    "train_class_rows": [
+      36252,
+      36254
+    ],
+    "total_optimizer_steps": 6798,
+    "warmup_steps": 680,
+    "best_epoch": 3,
+    "best_validation_loss": 0.014892670821063742,
+    "history": [
+      {
+        "epoch": 1,
+        "train_loss": 0.0713626201403136,
+        "validation_loss": 0.02322157561984488
+      },
+      {
+        "epoch": 2,
+        "train_loss": 0.004822697342250814,
+        "validation_loss": 0.03268307848663089
+      },
+      {
+        "epoch": 3,
+        "train_loss": 0.0008943103460975087,
+        "validation_loss": 0.014892670821063742
+      }
+    ],
+    "token_coverage": {
+      "train": {
+        "rows": 72506,
+        "max_content_tokens": 510,
+        "truncated_rows": 40473,
+        "truncated_rate": 0.5582020798278763,
+        "retained_token_fraction": 0.5561659871123315,
+        "median_content_tokens": 599.0,
+        "p95_content_tokens": 1895.0,
+        "max_content_tokens_observed": 25686
+      },
+      "validation": {
+        "rows": 18123,
+        "max_content_tokens": 510,
+        "truncated_rows": 10138,
+        "truncated_rate": 0.5593996578932848,
+        "retained_token_fraction": 0.5581176808627566,
+        "median_content_tokens": 604.0,
+        "p95_content_tokens": 1884.0,
+        "max_content_tokens_observed": 6040
+      },
+      "test": {
+        "rows": 940,
+        "max_content_tokens": 510,
+        "truncated_rows": 541,
+        "truncated_rate": 0.575531914893617,
+        "retained_token_fraction": 0.4974968924675516,
+        "median_content_tokens": 627.5,
+        "p95_content_tokens": 2366.5499999999993,
+        "max_content_tokens_observed": 3481
+      }
+    },
+    "torch": "2.8.0+cu128",
+    "transformers": "4.57.6",
+    "gpu": "NVIDIA L40S",
+    "checkpoint_sha256": "b35a715f6b0ba93fdd9a5b277c726df2586e6cd9523c11863be09c413c2847e6"
+  },
+  "evaluation": {
+    "validation_thresholds": {
+      "youden": 0.9998892545700073,
+      "fpr_0.01": 0.006291511934250593,
+      "fpr_0.05": 3.237076089135371e-05
+    },
+    "metrics": {
+      "roc_auc": 1.0,
+      "balanced_accuracy": 0.9989361702127659,
+      "tpr_at_fpr_0.01": 1.0,
+      "observed_fpr_at_fpr_0.01": 0.01702127659574468,
+      "balanced_accuracy_at_fpr_0.01": 0.9914893617021276,
+      "tpr_at_fpr_0.05": 1.0,
+      "observed_fpr_at_fpr_0.05": 0.07659574468085106,
+      "balanced_accuracy_at_fpr_0.05": 0.9617021276595745
+    },
+    "confidence_intervals_95": {
+      "roc_auc": [
+        0.9999999999999999,
+        1.0
+      ],
+      "balanced_accuracy": [
+        0.9968085106382979,
+        1.0
+      ],
+      "tpr_at_fpr_0.01": [
+        1.0,
+        1.0
+      ],
+      "observed_fpr_at_fpr_0.01": [
+        0.006329113924050633,
+        0.029790416439352593
+      ],
+      "balanced_accuracy_at_fpr_0.01": [
+        0.9851047917803237,
+        0.9968354430379747
+      ],
+      "tpr_at_fpr_0.05": [
+        1.0,
+        1.0
+      ],
+      "observed_fpr_at_fpr_0.05": [
+        0.05353319057815846,
+        0.1017360823889486
+      ],
+      "balanced_accuracy_at_fpr_0.05": [
+        0.9491319588055256,
+        0.9732334047109208
+      ]
+    },
+    "interval_note": "Conditional on fitted model and validation thresholds; whole probe_group_id resampled within label."
+  },
+  "paired_iid_test_metrics": {
+    "roc_auc": 1.0,
+    "balanced_accuracy": 1.0,
+    "tpr_at_fpr_0.01": 1.0,
+    "observed_fpr_at_fpr_0.01": 0.014285714285714285,
+    "balanced_accuracy_at_fpr_0.01": 0.9928571428571429,
+    "tpr_at_fpr_0.05": 1.0,
+    "observed_fpr_at_fpr_0.05": 0.05714285714285714,
+    "balanced_accuracy_at_fpr_0.05": 0.9714285714285714
+  },
+  "unmatched_target_rates": {},
+  "n3s_inference_only_metrics": null,
+  "predictions_sha256": "4819ddb5086676647b257cf54fcaf050f287b09410a25687cd5f9c6abb575258",
+  "warning": "Per-task test groups recur across folds and seeds; these intervals do not make rounds independent. OOD matched controls define the reported binary population."
+}

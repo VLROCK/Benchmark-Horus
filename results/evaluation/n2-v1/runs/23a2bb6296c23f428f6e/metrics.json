@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "task": {
+    "task_id": "23a2bb6296c23f428f6e",
+    "protocol": "logo",
+    "target": "qwen3_next_80b_a3b",
+    "seed": 20261105,
+    "fold": 0,
+    "model": "bertimbau",
+    "manifest_path": "results/protocols/ood-n2-v1/seed20261105/logo-qwen3-next-80b-a3b-5ef03baf75.parquet",
+    "manifest_sha256": "3586b543734e0215045679486b858bc843e7be126c0d70d4d3793e42f87ad0f8",
+    "counterfactual_n3s": false
+  },
+  "model_seed": 1080264533,
+  "input_hashes": {
+    "release_manifest": "929d0094a023b32db696b399f409649c9ad95a9e2cf21803dbb4495fe82a8a31",
+    "selected_texts": "66923ae507de39e1a219b3525877a658058a48c8d8e84df6cb166dfee519baef",
+    "task_manifest": "3586b543734e0215045679486b858bc843e7be126c0d70d4d3793e42f87ad0f8",
+    "evaluation_config": "255025dea4e24cc80886cacedf9e68d8a5ba8b837068f18276be54ffe31f33f0",
+    "model_config": "7562e8b1c5ea29b63a957bb33634a53cb21db4e129730626ad85510dbf575d95"
+  },
+  "counts": {
+    "train": 61333,
+    "validation": 15340,
+    "test_scored": 15302,
+    "binary_test": 15302,
+    "paired_binary_test": 2298,
+    "unmatched_target": 0
+  },
+  "id_sha256": {
+    "train": "9d8ed3a78636e249349db8506bd2ccafcfce590336162666db9e3b3aec538580",
+    "validation": "ba8b80ccef9d96f243c42e2f5a99e8dba8fbfb6f566da5f5085f15816fc5ec5a",
+    "test": "88bc3b347d26fad40dc39aacb6049e7e416980dfa6d30e7731bd2e420cec463a"
+  },
+  "model_info": {
+    "model": {
+      "name": "neuralmind/bert-base-portuguese-cased",
+      "revision": "94d69c95f98f7d5b2a8700c420230ae10def0baa",
+      "max_length": 512,
+      "learning_rate": 2e-05,
+      "epochs": 3,
+      "train_batch_size": 16,
+      "inference_batch_size": 32,
+      "gradient_accumulation_steps": 2,
+      "weight_decay": 0.01,
+      "warmup_ratio": 0.1,
+      "max_grad_norm": 1.0,
+      "device": "cuda"
+    },
+    "resolved_revision": "94d69c95f98f7d5b2a8700c420230ae10def0baa",
+    "seed": 1080264533,
+    "positive_class": "synthetic",
+    "train_rows": 61333,
+    "validation_rows": 15340,
+    "test_rows": 15302,
+    "train_class_rows": [
+      29961,
+      31372
+    ],
+    "total_optimizer_steps": 5751,
+    "warmup_steps": 576,
+    "best_epoch": 1,
+    "best_validation_loss": 0.011069644790644711,
+    "history": [
+      {
+        "epoch": 1,
+        "train_loss": 0.07664616953402711,
+        "validation_loss": 0.011069644790644711
+      },
+      {
+        "epoch": 2,
+        "train_loss": 0.00612541061678122,
+        "validation_loss": 0.0279424874679326
+      },
+      {
+        "epoch": 3,
+        "train_loss": 0.0011211082438832886,
+        "validation_loss": 0.012588796864209339
+      }
+    ],
+    "token_coverage": {
+      "train": {
+        "rows": 61333,
+        "max_content_tokens": 510,
+        "truncated_rows": 33358,
+        "truncated_rate": 0.5438833906706014,
+        "retained_token_fraction": 0.5605462919966833,
+        "median_content_tokens": 586.0,
+        "p95_content_tokens": 1858.0,
+        "max_content_tokens_observed": 25686
+      },
+      "validation": {
+        "rows": 15340,
+        "max_content_tokens": 510,
+        "truncated_rows": 8372,
+        "truncated_rate": 0.5457627118644067,
+        "retained_token_fraction": 0.5564939650194776,
+        "median_content_tokens": 590.0,
+        "p95_content_tokens": 1907.0999999999985,
+        "max_content_tokens_observed": 8807
+      },
+      "test": {
+        "rows": 15302,
+        "max_content_tokens": 510,
+        "truncated_rows": 9336,
+        "truncated_rate": 0.6101163246634427,
+        "retained_token_fraction": 0.5674567167153276,
+        "median_content_tokens": 620.0,
+        "p95_content_tokens": 1894.949999999999,
+        "max_content_tokens_observed": 5044
+      }
+    },
+    "torch": "2.8.0+cu128",
+    "transformers": "4.57.6",
+    "gpu": "NVIDIA L40S",
+    "checkpoint_sha256": "56949ecbde4e4e8c185ab744c45b7e758f84bd9e9cd63fc42d8134abcad94b0f"
+  },
+  "evaluation": {
+    "validation_thresholds": {
+      "youden": 0.9567918181419373,
+      "fpr_0.01": 0.058809831738471985,
+      "fpr_0.05": 0.0003619161434471607
+    },
+    "metrics": {
+      "roc_auc": 0.9999585225280329,
+      "balanced_accuracy": 0.9975820154228205,
+      "tpr_at_fpr_0.01": 0.9996078943928898,
+      "observed_fpr_at_fpr_0.01": 0.008887727094497451,
+      "balanced_accuracy_at_fpr_0.01": 0.9953600836491961,
+      "tpr_at_fpr_0.05": 1.0,
+      "observed_fpr_at_fpr_0.05": 0.044438635472487255,
+      "balanced_accuracy_at_fpr_0.05": 0.9777806822637564
+    },
+    "confidence_intervals_95": {
+      "roc_auc": [
+        0.9999373677946976,
+        0.9999781966409971
+      ],
+      "balanced_accuracy": [
+        0.9968156327620782,
+        0.9983355976281751
+      ],
+      "tpr_at_fpr_0.01": [
+        0.9990850869167429,
+        1.0
+      ],
+      "observed_fpr_at_fpr_0.01": [
+        0.006941602207387446,
+        0.01107317530808081
+      ],
+      "balanced_accuracy_at_fpr_0.01": [
+        0.9942482419937871,
+        0.9963638266201869
+      ],
+      "tpr_at_fpr_0.05": [
+        1.0,
+        1.0
+      ],
+      "observed_fpr_at_fpr_0.05": [
+        0.03970531559412207,
+        0.04901710225374553
+      ],
+      "balanced_accuracy_at_fpr_0.05": [
+        0.9754914488731272,
+        0.980147342202939
+      ]
+    },
+    "interval_note": "Conditional on fitted model and validation thresholds; whole probe_group_id resampled within label."
+  },
+  "paired_iid_test_metrics": {
+    "roc_auc": 0.9999848507916598,
+    "balanced_accuracy": 0.9982593559617058,
+    "tpr_at_fpr_0.01": 1.0,
+    "observed_fpr_at_fpr_0.01": 0.008703220191470844,
+    "balanced_accuracy_at_fpr_0.01": 0.9956483899042645,
+    "tpr_at_fpr_0.05": 1.0,
+    "observed_fpr_at_fpr_0.05": 0.047867711053089644,
+    "balanced_accuracy_at_fpr_0.05": 0.9760661444734552
+  },
+  "unmatched_target_rates": {},
+  "n3s_inference_only_metrics": null,
+  "predictions_sha256": "05b585e7c3d137a27b57c25b45e5fa295129606b8faf3645c666f04cbf7087ef",
+  "warning": "Per-task test groups recur across folds and seeds; these intervals do not make rounds independent. OOD matched controls define the reported binary population."
+}

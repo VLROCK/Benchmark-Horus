@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "task": {
+    "task_id": "13e10b24ce2035009534",
+    "protocol": "loso",
+    "target": "fazfacil.com.br",
+    "seed": 20261105,
+    "fold": 0,
+    "model": "bertimbau",
+    "manifest_path": "results/protocols/ood-n2-v1/seed20261105/loso-fazfacil-com-br-7eb181fcf6.parquet",
+    "manifest_sha256": "5bb0eaad3c9c461a1d0bb2e5bee9ed315e5be26f6c4f5d95701c1963ffb6bd73",
+    "counterfactual_n3s": false
+  },
+  "model_seed": 1080264533,
+  "input_hashes": {
+    "release_manifest": "929d0094a023b32db696b399f409649c9ad95a9e2cf21803dbb4495fe82a8a31",
+    "selected_texts": "66923ae507de39e1a219b3525877a658058a48c8d8e84df6cb166dfee519baef",
+    "task_manifest": "5bb0eaad3c9c461a1d0bb2e5bee9ed315e5be26f6c4f5d95701c1963ffb6bd73",
+    "evaluation_config": "255025dea4e24cc80886cacedf9e68d8a5ba8b837068f18276be54ffe31f33f0",
+    "model_config": "7562e8b1c5ea29b63a957bb33634a53cb21db4e129730626ad85510dbf575d95"
+  },
+  "counts": {
+    "train": 72559,
+    "validation": 18144,
+    "test_scored": 852,
+    "binary_test": 852,
+    "paired_binary_test": 126,
+    "unmatched_target": 0
+  },
+  "id_sha256": {
+    "train": "70b65ae088bc27410e590910e2088ef862849f6c613a989f74cc3fbe0da1e5ef",
+    "validation": "0b99e891e18e41546ee102db299154bc876185a0ff8ade422929c17be6744ef9",
+    "test": "9d54b1a7f709b4a8dbd59e06c42de3688eae5e0a2a736532a7649dc9d2ffbd92"
+  },
+  "model_info": {
+    "model": {
+      "name": "neuralmind/bert-base-portuguese-cased",
+      "revision": "94d69c95f98f7d5b2a8700c420230ae10def0baa",
+      "max_length": 512,
+      "learning_rate": 2e-05,
+      "epochs": 3,
+      "train_batch_size": 16,
+      "inference_batch_size": 32,
+      "gradient_accumulation_steps": 2,
+      "weight_decay": 0.01,
+      "warmup_ratio": 0.1,
+      "max_grad_norm": 1.0,
+      "device": "cuda"
+    },
+    "resolved_revision": "94d69c95f98f7d5b2a8700c420230ae10def0baa",
+    "seed": 1080264533,
+    "positive_class": "synthetic",
+    "train_rows": 72559,
+    "validation_rows": 18144,
+    "test_rows": 852,
+    "train_class_rows": [
+      36279,
+      36280
+    ],
+    "total_optimizer_steps": 6804,
+    "warmup_steps": 681,
+    "best_epoch": 2,
+    "best_validation_loss": 0.008155596618170191,
+    "history": [
+      {
+        "epoch": 1,
+        "train_loss": 0.06809498893540242,
+        "validation_loss": 0.011958036514117316
+      },
+      {
+        "epoch": 2,
+        "train_loss": 0.005805105134754817,
+        "validation_loss": 0.008155596618170191
+      },
+      {
+        "epoch": 3,
+        "train_loss": 0.0007701537810349316,
+        "validation_loss": 0.011483097059957209
+      }
+    ],
+    "token_coverage": {
+      "train": {
+        "rows": 72559,
+        "max_content_tokens": 510,
+        "truncated_rows": 40583,
+        "truncated_rate": 0.5593103543323364,
+        "retained_token_fraction": 0.55521188898621,
+        "median_content_tokens": 601.0,
+        "p95_content_tokens": 1896.0999999999913,
+        "max_content_tokens_observed": 25686
+      },
+      "validation": {
+        "rows": 18144,
+        "max_content_tokens": 510,
+        "truncated_rows": 10192,
+        "truncated_rate": 0.5617283950617284,
+        "retained_token_fraction": 0.5539932004045545,
+        "median_content_tokens": 604.0,
+        "p95_content_tokens": 1920.8499999999985,
+        "max_content_tokens_observed": 8807
+      },
+      "test": {
+        "rows": 852,
+        "max_content_tokens": 510,
+        "truncated_rows": 391,
+        "truncated_rate": 0.45892018779342725,
+        "retained_token_fraction": 0.7826626803610776,
+        "median_content_tokens": 488.0,
+        "p95_content_tokens": 1053.0,
+        "max_content_tokens_observed": 4658
+      }
+    },
+    "torch": "2.8.0+cu128",
+    "transformers": "4.57.6",
+    "gpu": "NVIDIA L40S",
+    "checkpoint_sha256": "a61db4ac4bef3b08195b672f55368d05a78bedde9c5dfbe9b23cdc3a31a92ac2"
+  },
+  "evaluation": {
+    "validation_thresholds": {
+      "youden": 0.9893426895141602,
+      "fpr_0.01": 0.004101465921849012,
+      "fpr_0.05": 0.000220102519961074
+    },
+    "metrics": {
+      "roc_auc": 0.9999999999999999,
+      "balanced_accuracy": 1.0,
+      "tpr_at_fpr_0.01": 1.0,
+      "observed_fpr_at_fpr_0.01": 0.028169014084507043,
+      "balanced_accuracy_at_fpr_0.01": 0.9859154929577465,
+      "tpr_at_fpr_0.05": 1.0,
+      "observed_fpr_at_fpr_0.05": 0.2323943661971831,
+      "balanced_accuracy_at_fpr_0.05": 0.8838028169014085
+    },
+    "confidence_intervals_95": {
+      "roc_auc": [
+        0.9999999999999999,
+        1.0
+      ],
+      "balanced_accuracy": [
+        1.0,
+        1.0
+      ],
+      "tpr_at_fpr_0.01": [
+        1.0,
+        1.0
+      ],
+      "observed_fpr_at_fpr_0.01": [
+        0.009684645167327557,
+        0.049634127653053375
+      ],
+      "balanced_accuracy_at_fpr_0.01": [
+        0.9751829361734733,
+        0.9951576774163362
+      ],
+      "tpr_at_fpr_0.05": [
+        1.0,
+        1.0
+      ],
+      "observed_fpr_at_fpr_0.05": [
+        0.1874964729119639,
+        0.2776534905533967
+      ],
+      "balanced_accuracy_at_fpr_0.05": [
+        0.8611732547233016,
+        0.906251763544018
+      ]
+    },
+    "interval_note": "Conditional on fitted model and validation thresholds; whole probe_group_id resampled within label."
+  },
+  "paired_iid_test_metrics": {
+    "roc_auc": 1.0,
+    "balanced_accuracy": 1.0,
+    "tpr_at_fpr_0.01": 1.0,
+    "observed_fpr_at_fpr_0.01": 0.015873015873015872,
+    "balanced_accuracy_at_fpr_0.01": 0.9920634920634921,
+    "tpr_at_fpr_0.05": 1.0,
+    "observed_fpr_at_fpr_0.05": 0.25396825396825395,
+    "balanced_accuracy_at_fpr_0.05": 0.873015873015873
+  },
+  "unmatched_target_rates": {},
+  "n3s_inference_only_metrics": null,
+  "predictions_sha256": "02c46948414f6d437a80923532b1479102279cded8e87b916309d0c0d58f7a0c",
+  "warning": "Per-task test groups recur across folds and seeds; these intervals do not make rounds independent. OOD matched controls define the reported binary population."
+}

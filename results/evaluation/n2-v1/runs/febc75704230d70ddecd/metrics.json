@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "task": {
+    "task_id": "febc75704230d70ddecd",
+    "protocol": "loso",
+    "target": "Revista Berro",
+    "seed": 20261106,
+    "fold": 0,
+    "model": "bertimbau",
+    "manifest_path": "results/protocols/ood-n2-v1/seed20261106/loso-revista-berro-2ea5344180.parquet",
+    "manifest_sha256": "68fbbfc5ab9e89a9c3000b571ac7a16de8e77ed0e8b44e6847f4b55d07f70409",
+    "counterfactual_n3s": false
+  },
+  "model_seed": 2895608551,
+  "input_hashes": {
+    "release_manifest": "929d0094a023b32db696b399f409649c9ad95a9e2cf21803dbb4495fe82a8a31",
+    "selected_texts": "66923ae507de39e1a219b3525877a658058a48c8d8e84df6cb166dfee519baef",
+    "task_manifest": "68fbbfc5ab9e89a9c3000b571ac7a16de8e77ed0e8b44e6847f4b55d07f70409",
+    "evaluation_config": "255025dea4e24cc80886cacedf9e68d8a5ba8b837068f18276be54ffe31f33f0",
+    "model_config": "7562e8b1c5ea29b63a957bb33634a53cb21db4e129730626ad85510dbf575d95"
+  },
+  "counts": {
+    "train": 72521,
+    "validation": 18110,
+    "test_scored": 940,
+    "binary_test": 940,
+    "paired_binary_test": 142,
+    "unmatched_target": 0
+  },
+  "id_sha256": {
+    "train": "2176d462d01d3c8c99fcf68b1af0fcf8247a598bd276a10ef6ee9031b8160e8f",
+    "validation": "cf896ecc9445ae1ae88ba67b19f983f36f9389a6a8c8848a2fe3edc431aebd7b",
+    "test": "0c86d440e47cee46ae0465c0d8bd27206469d0a7e48064b3a087b4106419ce2d"
+  },
+  "model_info": {
+    "model": {
+      "name": "neuralmind/bert-base-portuguese-cased",
+      "revision": "94d69c95f98f7d5b2a8700c420230ae10def0baa",
+      "max_length": 512,
+      "learning_rate": 2e-05,
+      "epochs": 3,
+      "train_batch_size": 16,
+      "inference_batch_size": 32,
+      "gradient_accumulation_steps": 2,
+      "weight_decay": 0.01,
+      "warmup_ratio": 0.1,
+      "max_grad_norm": 1.0,
+      "device": "cuda"
+    },
+    "resolved_revision": "94d69c95f98f7d5b2a8700c420230ae10def0baa",
+    "seed": 2895608551,
+    "positive_class": "synthetic",
+    "train_rows": 72521,
+    "validation_rows": 18110,
+    "test_rows": 940,
+    "train_class_rows": [
+      36254,
+      36267
+    ],
+    "total_optimizer_steps": 6801,
+    "warmup_steps": 681,
+    "best_epoch": 2,
+    "best_validation_loss": 0.009801881636284248,
+    "history": [
+      {
+        "epoch": 1,
+        "train_loss": 0.06761256536465063,
+        "validation_loss": 0.012747813096709143
+      },
+      {
+        "epoch": 2,
+        "train_loss": 0.00498874777087636,
+        "validation_loss": 0.009801881636284248
+      },
+      {
+        "epoch": 3,
+        "train_loss": 0.0006710924141533736,
+        "validation_loss": 0.011535333683018253
+      }
+    ],
+    "token_coverage": {
+      "train": {
+        "rows": 72521,
+        "max_content_tokens": 510,
+        "truncated_rows": 40514,
+        "truncated_rate": 0.5586519766688269,
+        "retained_token_fraction": 0.5566427575730529,
+        "median_content_tokens": 600.0,
+        "p95_content_tokens": 1891.0,
+        "max_content_tokens_observed": 25686
+      },
+      "validation": {
+        "rows": 18110,
+        "max_content_tokens": 510,
+        "truncated_rows": 10118,
+        "truncated_rate": 0.5586968525676422,
+        "retained_token_fraction": 0.5561705186511541,
+        "median_content_tokens": 597.0,
+        "p95_content_tokens": 1900.5499999999993,
+        "max_content_tokens_observed": 6040
+      },
+      "test": {
+        "rows": 940,
+        "max_content_tokens": 510,
+        "truncated_rows": 544,
+        "truncated_rate": 0.5787234042553191,
+        "retained_token_fraction": 0.4975683874597141,
+        "median_content_tokens": 627.0,
+        "p95_content_tokens": 2364.2,
+        "max_content_tokens_observed": 3481
+      }
+    },
+    "torch": "2.8.0+cu128",
+    "transformers": "4.57.6",
+    "gpu": "NVIDIA L40S",
+    "checkpoint_sha256": "7e03b7c072248022c3a619ce49be6438746fda47be568b8adfc3463c43298bef"
+  },
+  "evaluation": {
+    "validation_thresholds": {
+      "youden": 0.9942882061004639,
+      "fpr_0.01": 0.0013570846058428288,
+      "fpr_0.05": 4.5316381147131324e-05
+    },
+    "metrics": {
+      "roc_auc": 0.9999728383884111,
+      "balanced_accuracy": 0.9957446808510638,
+      "tpr_at_fpr_0.01": 1.0,
+      "observed_fpr_at_fpr_0.01": 0.01276595744680851,
+      "balanced_accuracy_at_fpr_0.01": 0.9936170212765958,
+      "tpr_at_fpr_0.05": 1.0,
+      "observed_fpr_at_fpr_0.05": 0.05531914893617021,
+      "balanced_accuracy_at_fpr_0.05": 0.9723404255319149
+    },
+    "confidence_intervals_95": {
+      "roc_auc": [
+        0.9999039069711027,
+        1.0
+      ],
+      "balanced_accuracy": [
+        0.9914893617021276,
+        0.9989361702127659
+      ],
+      "tpr_at_fpr_0.01": [
+        1.0,
+        1.0
+      ],
+      "observed_fpr_at_fpr_0.01": [
+        0.0041838820415614816,
+        0.02355586751339478
+      ],
+      "balanced_accuracy_at_fpr_0.01": [
+        0.9882220662433027,
+        0.9979080589792193
+      ],
+      "tpr_at_fpr_0.05": [
+        1.0,
+        1.0
+      ],
+      "observed_fpr_at_fpr_0.05": [
+        0.035635692808655355,
+        0.07807150151844977
+      ],
+      "balanced_accuracy_at_fpr_0.05": [
+        0.9609642492407751,
+        0.9821821535956723
+      ]
+    },
+    "interval_note": "Conditional on fitted model and validation thresholds; whole probe_group_id resampled within label."
+  },
+  "paired_iid_test_metrics": {
+    "roc_auc": 1.0,
+    "balanced_accuracy": 1.0,
+    "tpr_at_fpr_0.01": 1.0,
+    "observed_fpr_at_fpr_0.01": 0.014084507042253521,
+    "balanced_accuracy_at_fpr_0.01": 0.9929577464788732,
+    "tpr_at_fpr_0.05": 1.0,
+    "observed_fpr_at_fpr_0.05": 0.056338028169014086,
+    "balanced_accuracy_at_fpr_0.05": 0.971830985915493
+  },
+  "unmatched_target_rates": {},
+  "n3s_inference_only_metrics": null,
+  "predictions_sha256": "0e4195fbd4b342c9b07309b4ea1ff2737c46aef790aab83bc691ed78f27ed682",
+  "warning": "Per-task test groups recur across folds and seeds; these intervals do not make rounds independent. OOD matched controls define the reported binary population."
+}

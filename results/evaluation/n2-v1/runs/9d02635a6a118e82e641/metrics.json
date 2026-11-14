@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "task": {
+    "task_id": "9d02635a6a118e82e641",
+    "protocol": "loso",
+    "target": "Kaggle - Portuguese Narrative Essays",
+    "seed": 20261107,
+    "fold": 3,
+    "model": "char4_svm",
+    "manifest_path": "results/protocols/ood-n2-v1/seed20261107/loso-kaggle-portuguese-narrative--06b304abd8.parquet",
+    "manifest_sha256": "59b3a31daa41f41821189167592f8edb5b5fdc5e1bc25cef2d04a94320c5a570",
+    "counterfactual_n3s": false
+  },
+  "model_seed": 2789053023,
+  "input_hashes": {
+    "release_manifest": "929d0094a023b32db696b399f409649c9ad95a9e2cf21803dbb4495fe82a8a31",
+    "selected_texts": "66923ae507de39e1a219b3525877a658058a48c8d8e84df6cb166dfee519baef",
+    "task_manifest": "59b3a31daa41f41821189167592f8edb5b5fdc5e1bc25cef2d04a94320c5a570",
+    "evaluation_config": "255025dea4e24cc80886cacedf9e68d8a5ba8b837068f18276be54ffe31f33f0",
+    "model_config": "7139099119a796aef25b537cf77c5310e3b6d8f03e46620caff818e770d1a445"
+  },
+  "counts": {
+    "train": 72242,
+    "validation": 18061,
+    "test_scored": 1322,
+    "binary_test": 1322,
+    "paired_binary_test": 196,
+    "unmatched_target": 0
+  },
+  "id_sha256": {
+    "train": "463c2f4b4f7374ef226ef841e32354b2d7069efbcd4893fcefc14e8ea2ea9493",
+    "validation": "f80c53ae8ce487dbcf1d02ced862183db9bf6b3f7510ef9ff13df125f0b8798d",
+    "test": "65df6b305c2c8cdf30346f1d7f387dd67eecc8a80594614121b70e50001bb9ef"
+  },
+  "model_info": {
+    "selected_c": 1.0,
+    "inner_auc_by_c": {
+      "0.1": 0.9997827510242003,
+      "1.0": 0.9998585738169202,
+      "10.0": 0.9998464905102956
+    }
+  },
+  "evaluation": {
+    "validation_thresholds": {
+      "youden": -0.05805687099627943,
+      "fpr_0.01": -0.20581510438893436,
+      "fpr_0.05": -0.6672546869412216
+    },
+    "metrics": {
+      "roc_auc": 0.9992607359225123,
+      "balanced_accuracy": 0.9901664145234492,
+      "tpr_at_fpr_0.01": 0.9878971255673222,
+      "observed_fpr_at_fpr_0.01": 0.0045385779122541605,
+      "balanced_accuracy_at_fpr_0.01": 0.991679273827534,
+      "tpr_at_fpr_0.05": 0.9969742813918305,
+      "observed_fpr_at_fpr_0.05": 0.09379727685325265,
+      "balanced_accuracy_at_fpr_0.05": 0.9515885022692889
+    },
+    "confidence_intervals_95": {
+      "roc_auc": [
+        0.9982411624640605,
+        0.9999096726237393
+      ],
+      "balanced_accuracy": [
+        0.9841932484711878,
+        0.9947254899941164
+      ],
+      "tpr_at_fpr_0.01": [
+        0.9788199697428139,
+        0.9954614220877458
+      ],
+      "observed_fpr_at_fpr_0.01": [
+        0.0,
+        0.010622558357278919
+      ],
+      "balanced_accuracy_at_fpr_0.01": [
+        0.9864315572924581,
+        0.996203995066209
+      ],
+      "tpr_at_fpr_0.05": [
+        0.9924357034795764,
+        1.0
+      ],
+      "observed_fpr_at_fpr_0.05": [
+        0.0692759499536608,
+        0.11864864511404057
+      ],
+      "balanced_accuracy_at_fpr_0.05": [
+        0.9388690634508178,
+        0.9639095824849567
+      ]
+    },
+    "interval_note": "Conditional on fitted model and validation thresholds; whole probe_group_id resampled within label."
+  },
+  "paired_iid_test_metrics": {
+    "roc_auc": 1.0,
+    "balanced_accuracy": 0.9948453608247423,
+    "tpr_at_fpr_0.01": 0.9896907216494846,
+    "observed_fpr_at_fpr_0.01": 0.0,
+    "balanced_accuracy_at_fpr_0.01": 0.9948453608247423,
+    "tpr_at_fpr_0.05": 1.0,
+    "observed_fpr_at_fpr_0.05": 0.08080808080808081,
+    "balanced_accuracy_at_fpr_0.05": 0.9595959595959596
+  },
+  "unmatched_target_rates": {},
+  "n3s_inference_only_metrics": null,
+  "predictions_sha256": "861e7617407619702d9034b1a1deb227ae3e3977a1c9d82721f6b572e28b9054",
+  "warning": "Per-task test groups recur across folds and seeds; these intervals do not make rounds independent. OOD matched controls define the reported binary population."
+}
