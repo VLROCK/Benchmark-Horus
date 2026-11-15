@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "kind": "n2_text_baseline_summary",
+  "plans": [
+    {
+      "path": "results/evaluation/n2-v1/plans/iid_cpu.csv",
+      "sha256": "4a2a535c4a5443340484e14588fd589dd0b5dee2d20ecff0aa5628a779c99768"
+    },
+    {
+      "path": "results/evaluation/n2-v1/plans/iid_bert.csv",
+      "sha256": "680cd7a462ecb41804338fe85eeec83f6c131fc88c465823fc91c54c749edb77"
+    },
+    {
+      "path": "results/evaluation/n2-v1/plans/logo_cpu.csv",
+      "sha256": "3c3dc7226191d7cae08ed9256b911d5b17674cfeaec2893caabafe86faf57cb4"
+    },
+    {
+      "path": "results/evaluation/n2-v1/plans/lodo_cpu.csv",
+      "sha256": "be1583d873fa114d69d239e9c64fe307bde981f86ca65b6f3ca8518a2bdf8739"
+    },
+    {
+      "path": "results/evaluation/n2-v1/plans/loso_cpu.csv",
+      "sha256": "465be22035e69abcfe9c032fe2e09d1c0f80726797942d43b0ebb647330f3d1e"
+    },
+    {
+      "path": "results/evaluation/n2-v1/plans/logo_bert.csv",
+      "sha256": "7d4ad3f53cfe46828559e00d77104ac145c42e8900630d5c55d776cdc4688c9c"
+    },
+    {
+      "path": "results/evaluation/n2-v1/plans/lodo_bert.csv",
+      "sha256": "8da7147af73ffcb427b61cbc52752fd2f75c5b201d24b9bef226631f12c34c5a"
+    },
+    {
+      "path": "results/evaluation/n2-v1/plans/loso_bert.csv",
+      "sha256": "fad07d21278f512fc88ab8d4c2920baa70d986bbeb28edbf6e0d3a05edebd409"
+    }
+  ],
+  "planned_tasks": 3411,
+  "completed_tasks": 3411,
+  "complete": true,
+  "complete_seed_targets": 807,
+  "missing_task_ids": [],
+  "incomplete_seed_targets": 0,
+  "paired_seed_targets": 780,
+  "paired_seed_targets_skipped": 0,
+  "n3s_iid_seed_models": 24,
+  "n3s_note": "N3s is inference-only with the N2-trained detector and frozen N2 validation thresholds; deltas are paired on the same IDs and shared group-bootstrap draws. No N3s retraining occurred.",
+  "figures": [
+    "figures/iid_ood_bertimbau.png",
+    "figures/iid_ood_char4_svm.png",
+    "figures/iid_ood_human_iforest.png",
+    "figures/iid_ood_surface_all.png",
+    "figures/iid_ood_word_lr.png"
+  ],
+  "bootstrap_replicates": 2000,
+  "intervals": "95% percentile, probe-group bootstrap within label; same draw across folds and paired IID/OOD scores; conditional on fit and validation thresholds",
+  "fold_note": "A group is complete when every fold listed in its plan has a verified run. BERTimbau OOD may have one planned fold; its estimate is single-fold, not a five-fold mean.",
+  "interpretation": "OOD macro gives each eligible held-out target equal weight. Three seeds reuse one corpus and are not independent studies. Paired deltas use only the common frozen IID test IDs."
+}
