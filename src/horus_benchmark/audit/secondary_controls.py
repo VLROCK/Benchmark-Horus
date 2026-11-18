@@ -285,7 +285,9 @@ def match_nuisance(frame: pd.DataFrame, *, unit: str, tier: str,
                       "matched_per_class": count,
                       "human_retention": count / len(human) if len(human) else 0.0,
                       "synthetic_retention": count / len(synthetic) if len(synthetic) else 0.0})
-        by_id = subset.set_index("record_id", verify_integrity=True)
+        by_id = subset.set_index("record_id")
+        if not by_id.index.is_unique:
+            raise ValueError("Nuisance cell contains duplicate record IDs")
         for human_id, synthetic_id in zip(human.head(count).record_id,
                                           synthetic.head(count).record_id):
             pair_id = _sha256_text(f"{seed}|{unit}|{tier}|{human_id}|{synthetic_id}")[:20]

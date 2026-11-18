@@ -78,12 +78,15 @@ def _parent_tasks(parent_dir: Path, release_manifest_sha256: str,
             summary.get("seeds") != seeds):
         raise ValueError("Parent OOD manifests do not match the frozen release")
     tasks = pd.read_csv(parent_dir / "tasks.csv", keep_default_na=False)
-    required = {"seed", "protocol", "target", "status", "manifest_path",
-                "manifest_sha256"}
+    required = {"seed", "protocol", "target", "source_area", "status",
+                "manifest_path", "manifest_sha256"}
     if required - set(tasks):
         raise ValueError("Parent OOD task index lacks required columns")
-    if tasks.duplicated(["seed", "protocol", "target"]).any():
-        raise ValueError("Parent OOD task index has duplicate targets")
+    # LOSO legitimately repeats a source family in different areas. Its area
+    # is part of the parent protocol identity; LOGO still has one row per
+    # generator and seed, checked again when each LOGO manifest is loaded.
+    if tasks.duplicated(["seed", "protocol", "source_area", "target"]).any():
+        raise ValueError("Parent OOD task index has duplicate identities")
     return summary, tasks
 
 

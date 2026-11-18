@@ -20,10 +20,13 @@ def _sample() -> pd.DataFrame:
     rows = []
     for area in ("academic", "social"):
         for fold in range(5):
+            # LOGO matches controls in length cells. One human per fold lies
+            # outside the synthetic target cell and stays in development.
             for j in range(4):
                 rid = f"{area}-h-{fold}-{j}"
                 rows.append((rid, rid, "human", area, "source-a" if j < 2
-                             else "source-b", "human", 100, "development", fold))
+                             else "source-b", "human", 200 if j == 0 else 100,
+                             "development", fold))
             for generator in ("g1", "g2"):
                 for j in range(3):
                     rid = f"{area}-{generator}-{fold}-{j}"
