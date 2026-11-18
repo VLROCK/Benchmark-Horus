@@ -164,7 +164,7 @@ def create_plan(config_path: Path, output_dir: Path) -> list[Path]:
     paths: list[Path] = []
     for mode in MODES:
         for kind, is_bert in (("cpu", False), ("bert", True)):
-            subset = plan.loc[plan.mode.eq(mode) & plan.model.eq("bertimbau").eq(is_bert)]
+            subset = plan.loc[plan["mode"].eq(mode) & plan["model"].eq("bertimbau").eq(is_bert)]
             path = output_dir / f"{mode}_{kind}.csv"
             subset.to_csv(path, index=False)
             paths.append(path)

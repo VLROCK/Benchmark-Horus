@@ -7,9 +7,11 @@ import hashlib
 import numpy as np
 import pandas as pd
 import pytest
+import yaml
 
+from horus_benchmark.evaluation import secondary_views
 from horus_benchmark.evaluation.secondary_views import (
-    _load_text, _predictions, _reference, _task_id,
+    _load_text, _predictions, _reference, _task_id, create_plan,
 )
 
 
@@ -60,3 +62,51 @@ def test_task_identity_changes_with_view_bytes() -> None:
     row = {"mode": "unit_trained", "view": "sentence", "model": "word_lr",
            "seed": 20261105, "fold": 0, "baseline_task_id": "old"}
     assert _task_id(row, "config", "view-a") != _task_id(row, "config", "view-b")
+
+
+def test_plan_writes_cpu_and_bert_modes(tmp_path, monkeypatch) -> None:
+    segment_dir = tmp_path / "segments"
+    layout_dir = tmp_path / "layout"
+    segment_dir.mkdir()
+    layout_dir.mkdir()
+    (segment_dir / "segment_manifest.json").write_text("{}", encoding="utf-8")
+    (layout_dir / "layout_manifest.json").write_text("{}", encoding="utf-8")
+    views = {}
+    for name in (*secondary_views.UNITS, *secondary_views.LAYOUTS):
+        path = tmp_path / name
+        path.write_text(name, encoding="utf-8")
+        views[name] = path
+    config = {
+        "schema_version": 1,
+        "experiment_id": "horus-n2-secondary-views-v1",
+        "baseline_config": "baseline.yaml",
+        "baseline_prepared": "prepared",
+        "baseline_cpu_plan": "cpu.csv",
+        "baseline_bert_plan": "bert.csv",
+        "baseline_runs": "runs",
+        "segments_dir": str(segment_dir),
+        "layout_dir": str(layout_dir),
+        "seeds": [20261105, 20261106, 20261107],
+        "folds": [0, 1, 2, 3, 4],
+        "fpr_targets": [0.01, 0.05],
+        "bootstrap_replicates": 2000,
+    }
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(yaml.safe_dump(config), encoding="utf-8")
+    monkeypatch.setattr(secondary_views, "_inputs", lambda _cfg: ({}, {}, {}, {}))
+    monkeypatch.setattr(secondary_views, "_view_paths", lambda *_args: views)
+    monkeypatch.setattr(secondary_views, "_baseline_plan", lambda _cfg: pd.DataFrame([
+        {"model": "word_lr", "seed": 20261105, "fold": 0, "task_id": "cpu-task"},
+        {"model": "bertimbau", "seed": 20261105, "fold": 0, "task_id": "bert-task"},
+    ]))
+    output = tmp_path / "plans"
+    paths = create_plan(config_path, output)
+    assert len(paths) == 6
+    assert {path.name: len(pd.read_csv(path)) for path in paths} == {
+        "document_to_views_cpu.csv": 1,
+        "document_to_views_bert.csv": 1,
+        "unit_trained_cpu.csv": 2,
+        "unit_trained_bert.csv": 2,
+        "layout_retrained_cpu.csv": 2,
+        "layout_retrained_bert.csv": 2,
+    }
