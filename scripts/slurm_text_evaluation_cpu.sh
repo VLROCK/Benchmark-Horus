@@ -25,8 +25,8 @@ export PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
 export OPENBLAS_NUM_THREADS="${SLURM_CPUS_PER_TASK:-8}"
 "$python_bin" -m horus_benchmark.evaluation.benchmark_runner run-task \
-  --config configs/experiments/text_evaluation_n2_v1.yaml \
-  --prepared-dir results/evaluation/n2-v1/prepared \
+  --config "${HORUS_EVAL_CONFIG:-configs/experiments/text_evaluation_n2_v1.yaml}" \
+  --prepared-dir "${HORUS_PREPARED_DIR:-results/evaluation/n2-v1/prepared}" \
   --plan "$HORUS_PLAN" --task-index "$task_index" \
   --output-root "${HORUS_RUN_ROOT:-results/evaluation/n2-v1/runs}"
 

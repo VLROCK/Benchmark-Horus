@@ -28,7 +28,7 @@ TEXT_MODELS = (
     "surface_all", "word_lr", "char4_lr", "char4_svm", "human_iforest",
 )
 ALL_MODELS = (*TEXT_MODELS, "bertimbau")
-PROTOCOLS = ("iid", "logo", "lodo", "loso")
+PROTOCOLS = ("iid", "logo", "lodo", "loso", "logo_lodo")
 
 
 def sha256_file(path: Path) -> str:
@@ -46,7 +46,10 @@ def _json(path: Path) -> dict:
 def _config(path: Path) -> dict[str, Any]:
     cfg = yaml.safe_load(path.read_text(encoding="utf-8"))
     if (not isinstance(cfg, dict) or cfg.get("schema_version") != 1 or
-            cfg.get("experiment_id") != "horus-n2-iid-ood-text-evaluation-v1"):
+            cfg.get("experiment_id") not in {
+                "horus-n2-iid-ood-text-evaluation-v1",
+                "horus-n2-compound-ood-text-evaluation-v1",
+            }):
         raise ValueError("Unexpected text evaluation config")
     if cfg["seeds"] != [20261105, 20261106, 20261107] or cfg["folds"] != list(range(5)):
         raise ValueError("Configuration must use all frozen seeds and five folds")

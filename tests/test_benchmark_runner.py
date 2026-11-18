@@ -42,6 +42,19 @@ def test_ood_manifest_keeps_target_and_embargo_outside_fit() -> None:
     assert round_.loc[round_.role.eq("test_target"), "paired_iid_test"].all()
 
 
+def test_compound_ood_uses_existing_development_folds() -> None:
+    frame = _iid_rows().rename(columns={"split": "role"})
+    frame["paired_iid_test"] = False
+    frame.loc[frame.role.eq("test"), "role"] = "test_target"
+    frame.loc[frame.role.eq("test_target"), "paired_iid_test"] = True
+    frame.loc[frame.record_id.eq("synthetic-0"), "role"] = "embargo"
+    round_ = partition_task(frame, 1, "logo_lodo")
+    assert round_.loc[round_.record_id.eq("synthetic-0"), "role"].item() == "embargo"
+    assert set(round_.loc[round_.role.eq("validation"), "fold"]) == {1}
+    assert not set(round_.loc[round_.role.eq("train"), "record_id"]) & set(
+        round_.loc[round_.role.eq("test_target"), "record_id"])
+
+
 def test_crossing_probe_group_is_rejected() -> None:
     frame = _iid_rows()
     frame.loc[frame.record_id.eq("human-1"), "probe_group_id"] = "human-0"

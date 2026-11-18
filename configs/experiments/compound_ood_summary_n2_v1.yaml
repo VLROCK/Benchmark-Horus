@@ -1,0 +1,23 @@
+schema_version: 1
+experiment_id: horus-n2-compound-ood-summary-v1
+compound_tasks: results/protocols/compound-ood-n2-v1/tasks.csv
+shard_plan: results/evaluation/n2-compound-v1/plans/shards.csv
+compound_plans:
+  - results/evaluation/n2-compound-v1/plans/logo_lodo_cpu.csv
+  - results/evaluation/n2-compound-v1/plans/logo_lodo_bert.csv
+compound_runs: results/evaluation/n2-compound-v1/runs
+reference_plans:
+  - results/evaluation/n2-v1/plans/iid_cpu.csv
+  - results/evaluation/n2-v1/plans/iid_bert.csv
+  - results/evaluation/n2-v1/plans/logo_cpu.csv
+  - results/evaluation/n2-v1/plans/logo_bert.csv
+  - results/evaluation/n2-v1/plans/lodo_cpu.csv
+  - results/evaluation/n2-v1/plans/lodo_bert.csv
+reference_runs: results/evaluation/n2-v1/runs
+seeds: [20261105, 20261106, 20261107]
+models_cpu: [surface_all, word_lr, char4_svm, human_iforest]
+models_bert: [bertimbau]
+folds_cpu: [0, 1, 2, 3, 4]
+folds_bert: [0]
+bootstrap_replicates: 2000
+bootstrap_confidence: 0.95

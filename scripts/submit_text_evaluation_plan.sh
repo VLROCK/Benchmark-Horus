@@ -10,7 +10,8 @@ plan="$1"
 kind="$2"
 concurrent="$3"
 test -f "$plan"
-test -f results/evaluation/n2-v1/prepared/prepared_manifest.json
+prepared_dir="${HORUS_PREPARED_DIR:-results/evaluation/n2-v1/prepared}"
+test -f "$prepared_dir/prepared_manifest.json"
 [[ "$concurrent" =~ ^[1-9][0-9]*$ ]] || { echo "MAX_CONCURRENT must be positive" >&2; exit 2; }
 case "$kind" in
   cpu) slurm_script="scripts/slurm_text_evaluation_cpu.sh" ;;

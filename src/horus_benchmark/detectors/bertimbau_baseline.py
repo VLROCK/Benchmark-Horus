@@ -331,3 +331,61 @@ def train_and_score(
         torch.cuda.empty_cache()
     return {"validation_scores": validation_scores,
             "test_scores": test_scores, "metadata": metadata}
+
+
+def score_saved_checkpoint(
+    checkpoint_dir: str | Path,
+    text_views: Mapping[str, Sequence[str]],
+    config: BertimbauConfig | Mapping[str, Any],
+    *,
+    expected_sha256: str,
+) -> dict[str, Any]:
+    """Score derived views with a frozen, previously fitted BERTimbau checkpoint.
+
+    No fitting, epoch selection, or threshold calibration occurs here. The
+    checkpoint hash is checked before loading and every view is scored in its
+    caller-supplied order. This is intentionally separate from train_and_score.
+    """
+    import torch
+    from transformers import AutoModelForSequenceClassification, AutoTokenizer
+
+    cfg = config if isinstance(config, BertimbauConfig) else BertimbauConfig.from_mapping(config)
+    cfg.validate()
+    checkpoint = Path(checkpoint_dir)
+    weights = checkpoint / "model.safetensors"
+    if not weights.is_file() or _sha256_file(weights) != expected_sha256:
+        raise ValueError(f"Frozen BERTimbau checkpoint hash mismatch: {checkpoint}")
+    if not text_views or any(not isinstance(name, str) or not name for name in text_views):
+        raise ValueError("At least one named text view is required")
+    if cfg.device == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("Frozen BERTimbau scoring requires the requested CUDA device")
+    tokenizer = AutoTokenizer.from_pretrained(
+        checkpoint, local_files_only=True, trust_remote_code=False)
+    model = AutoModelForSequenceClassification.from_pretrained(
+        checkpoint, local_files_only=True, trust_remote_code=False)
+    if model.config.id2label.get(1) != "synthetic":
+        raise ValueError("Frozen BERTimbau checkpoint has an unexpected positive class")
+    device = torch.device(cfg.device)
+    model.to(device)
+    output: dict[str, Any] = {"scores": {}, "token_coverage": {},
+                              "checkpoint_sha256": expected_sha256}
+    try:
+        for name, source in text_views.items():
+            texts = list(source)
+            if any(not isinstance(value, str) or not value.strip() for value in texts):
+                raise ValueError(f"Empty or invalid text in {name}")
+            if texts:
+                batches = _loader(texts, None, tokenizer, cfg.inference_batch_size,
+                                  cfg.max_length, torch, seed=None)
+                scores, _ = _predict(model, batches, device, torch)
+                output["token_coverage"][name] = _token_coverage(texts, tokenizer,
+                                                                 cfg.max_length)
+            else:
+                scores = np.asarray([], dtype=np.float64)
+                output["token_coverage"][name] = {"rows": 0}
+            output["scores"][name] = scores
+    finally:
+        del model
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
+    return output
