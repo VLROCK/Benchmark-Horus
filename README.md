@@ -2,7 +2,9 @@
 
 Infraestrutura para auditoria, validação e avaliação reprodutível do benchmark Hórus de detecção de textos humanos versus sintéticos em português brasileiro.
 
-O workspace prepara o acesso aos dados e a rastreabilidade dos experimentos. Ele não implementa, nesta etapa, limpeza, normalização, balanceamento adicional, treinamento ou avaliação de detectores.
+O workspace implementa auditoria, normalização derivada, seleção, protocolos IID/OOD e avaliação de detectores. O release experimental congelado é `horus-n2-iid-v1`, com 107.566 documentos N2. O corpus completo permanece uma entrada rastreável distinta do benchmark selecionado.
+
+A campanha de detectores especializados, estilometria e ataques para o Abaporu está documentada em [ADVANCED_ABAPORU.md](experiments/03_iid_baselines/ADVANCED_ABAPORU.md). O lançador por fases é `scripts/run_advanced_abaporu.sh`; os novos métodos estão implementados e aguardam execução e validação experimental no cluster.
 
 ## Estado dos dados
 

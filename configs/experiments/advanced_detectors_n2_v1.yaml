@@ -1,0 +1,55 @@
+schema_version: 1
+experiment_id: horus-n2-advanced-detectors-v1
+release_dir: results/releases/horus-n2-iid-v1
+prepared_manifest: results/evaluation/n2-v1/prepared/prepared_manifest.json
+baseline_config: configs/experiments/text_evaluation_n2_v1.yaml
+baseline_plans: results/evaluation/n2-v1/plans
+baseline_runs: results/evaluation/n2-v1/runs
+ood_index: results/protocols/ood-n2-v1/tasks.csv
+compound_index: results/protocols/compound-ood-n2-v1/tasks.csv
+output_root: results/evaluation/n2-advanced-v1
+lm_config: configs/detectors/lm_pairs_v1.yaml
+lm_lock: results/evaluation/n2-advanced-v1/models.lock.json
+lm_cache: results/evaluation/n2-advanced-v1/cache/native
+linguistic_cache: results/evaluation/n2-advanced-v1/linguistic/native
+classical_config: configs/detectors/classical_adapted_v1.yaml
+seeds: [20261105, 20261106, 20261107]
+iid_folds: [0, 1, 2, 3, 4]
+ood_folds: [0]
+models_iid:
+  - stylo_lr
+  - stylo_svm
+  - stylo_lr_no_structure
+  - stylo_svm_no_structure
+  - alta_nb
+  - alta_delta
+  - alta_readability
+  - alta_pos
+  - alta_entropy
+  - alta_vote
+  - ghostbuster_ptbr_adapted
+  - binoculars_falcon
+  - fastdetect_gptj_neo
+  - fastdetect_falcon
+  - binoculars_qwen_adapted
+  - fastdetect_qwen_adapted
+models_ood:
+  - stylo_svm
+  - alta_vote
+  - ghostbuster_ptbr_adapted
+  - binoculars_falcon
+  - fastdetect_gptj_neo
+  - fastdetect_falcon
+  - binoculars_qwen_adapted
+  - fastdetect_qwen_adapted
+fpr_targets: [0.01, 0.05]
+bootstrap_replicates: 2000
+bootstrap_confidence: 0.95
+pilot_seed: 20261125
+pilot_per_class_area: 20
+shard_size: 2048
+ghostbuster:
+  max_depth: 3
+  discount: 0.9
+  c: 10.0
+  max_iter: 1000

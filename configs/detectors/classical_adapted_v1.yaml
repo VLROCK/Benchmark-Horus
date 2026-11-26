@@ -1,0 +1,35 @@
+schema_version: 1
+experiment_id: horus-classical-ptbr-adapted-v1
+reference: https://aclanthology.org/2024.alta-1.19/
+models:
+  - stylo_lr
+  - stylo_svm
+  - alta_nb
+  - alta_delta
+  - alta_readability
+  - alta_pos
+  - alta_entropy
+  - alta_vote
+ablation_models: [stylo_lr_no_structure, stylo_svm_no_structure]
+c_grid: [0.1, 1.0, 10.0]
+delta_words: [100, 500, 1000]
+tfidf:
+  min_df: 5
+  max_df: 0.95
+  max_features: 200000
+  sublinear_tf: true
+  ngram_range: [1, 2]
+nb_alpha: 1.0
+readability_pca: 7
+readability_neighbors: 5
+pos_neighbors: 3
+entropy_history_chars: 2000000
+lr_max_iter: 2000
+svm_max_iter: 5000
+without_structure: false
+notes:
+  - Portuguese readability and UPOS replace English-specific resources.
+  - Burrows vocabulary, normalization and profiles are fitted only on training.
+  - Syllables use a Pyphen pt_BR hyphenation approximation.
+  - Entropy histories preserve parent boundaries and never include validation or test.
+  - ALTA vote uses nested group-safe OOF kappa weights clipped at zero.
