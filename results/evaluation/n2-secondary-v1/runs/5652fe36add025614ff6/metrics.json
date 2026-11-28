@@ -1,0 +1,137 @@
+{
+  "schema_version": 1,
+  "kind": "n2_secondary_view_task",
+  "task": {
+    "model": "bertimbau",
+    "seed": 20261107,
+    "fold": 2,
+    "baseline_task_id": "30470408a383b6aac3a6",
+    "mode": "unit_trained",
+    "view": "paragraph",
+    "view_sha256": "6f14802c391306c1b78561d3b10d100187a9e2543ad3d0800d8bd5ceef452365",
+    "task_id": "5652fe36add025614ff6"
+  },
+  "config_sha256": "0d400160169010cfbe97694fc19877b2481ac4ae8be23c178984b9312c5a65c0",
+  "baseline_predictions_sha256": "b823298c4fc55124fd8a1da48d143bd967b778744a69824038af0bad23092459",
+  "segment_manifest_sha256": "edee2956605d961c33a22e489976505f065065e8fb3df15b1d272b318a147d96",
+  "layout_manifest_sha256": "fd076a9ff52308451ede8247f94da8c9122cae68075e4b17fc1f9df5028f0763",
+  "results": {
+    "paragraph": {
+      "rows": 7090,
+      "thresholds": {
+        "youden": 0.9794608354568481,
+        "fpr_0.01": 0.989048421382904,
+        "fpr_0.05": 0.5140331387519836
+      },
+      "view_metrics": {
+        "roc_auc": 0.9986909114893582,
+        "balanced_accuracy": 0.9849868703649503,
+        "tpr_at_fpr_0.01": 0.9803117309269893,
+        "observed_fpr_at_fpr_0.01": 0.01306532663316583,
+        "balanced_accuracy_at_fpr_0.01": 0.9836232021469118,
+        "tpr_at_fpr_0.05": 0.9965545529122232,
+        "observed_fpr_at_fpr_0.05": 0.044221105527638194,
+        "balanced_accuracy_at_fpr_0.05": 0.9761667236922925
+      },
+      "document_thresholds": {
+        "youden": 0.9954752326011658,
+        "fpr_0.01": 0.23620592057704926,
+        "fpr_0.05": 0.0005396002088673413
+      },
+      "document_metrics_same_ids": {
+        "roc_auc": 0.999997196812611,
+        "balanced_accuracy": 0.9991693496193024,
+        "tpr_at_fpr_0.01": 1.0,
+        "observed_fpr_at_fpr_0.01": 0.010050251256281407,
+        "balanced_accuracy_at_fpr_0.01": 0.9949748743718593,
+        "tpr_at_fpr_0.05": 1.0,
+        "observed_fpr_at_fpr_0.05": 0.044221105527638194,
+        "balanced_accuracy_at_fpr_0.05": 0.977889447236181
+      }
+    }
+  },
+  "model_info": {
+    "model": {
+      "name": "neuralmind/bert-base-portuguese-cased",
+      "revision": "94d69c95f98f7d5b2a8700c420230ae10def0baa",
+      "max_length": 512,
+      "learning_rate": 2e-05,
+      "epochs": 3,
+      "train_batch_size": 16,
+      "inference_batch_size": 32,
+      "gradient_accumulation_steps": 2,
+      "weight_decay": 0.01,
+      "warmup_ratio": 0.1,
+      "max_grad_norm": 1.0,
+      "device": "cuda"
+    },
+    "resolved_revision": "94d69c95f98f7d5b2a8700c420230ae10def0baa",
+    "seed": 155353473,
+    "positive_class": "synthetic",
+    "train_rows": 32122,
+    "validation_rows": 8057,
+    "test_rows": 7090,
+    "train_class_rows": [
+      4521,
+      27601
+    ],
+    "total_optimizer_steps": 3012,
+    "warmup_steps": 302,
+    "best_epoch": 1,
+    "best_validation_loss": 0.08163974340646753,
+    "history": [
+      {
+        "epoch": 1,
+        "train_loss": 0.18890646873747685,
+        "validation_loss": 0.08163974340646753
+      },
+      {
+        "epoch": 2,
+        "train_loss": 0.04073951903080282,
+        "validation_loss": 0.16470302967080125
+      },
+      {
+        "epoch": 3,
+        "train_loss": 0.0057432742143261285,
+        "validation_loss": 0.170111068912375
+      }
+    ],
+    "token_coverage": {
+      "train": {
+        "rows": 32122,
+        "max_content_tokens": 510,
+        "truncated_rows": 7,
+        "truncated_rate": 0.00021791918311437643,
+        "retained_token_fraction": 0.9997337598247379,
+        "median_content_tokens": 90.0,
+        "p95_content_tokens": 179.0,
+        "max_content_tokens_observed": 760
+      },
+      "validation": {
+        "rows": 8057,
+        "max_content_tokens": 510,
+        "truncated_rows": 0,
+        "truncated_rate": 0.0,
+        "retained_token_fraction": 1.0,
+        "median_content_tokens": 89.0,
+        "p95_content_tokens": 177.0,
+        "max_content_tokens_observed": 500
+      },
+      "test": {
+        "rows": 7090,
+        "max_content_tokens": 510,
+        "truncated_rows": 4,
+        "truncated_rate": 0.0005641748942172073,
+        "retained_token_fraction": 0.9997876061790921,
+        "median_content_tokens": 90.0,
+        "p95_content_tokens": 182.0,
+        "max_content_tokens_observed": 557
+      }
+    },
+    "torch": "2.8.0+cu128",
+    "transformers": "4.57.6",
+    "gpu": "NVIDIA L40S",
+    "checkpoint_sha256": "b3385303bcc990fc33b064a4b43a45b5fcebfdefff1d67f66308b7b5a0b0427e"
+  },
+  "predictions_sha256": "4f31898444bfa55b80f425672ad72b8858d3e57032b60de462e3decffa4feced"
+}

@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "task": {
+    "task_id": "9e9d62c1d630a1ce84b7",
+    "protocol": "logo_lodo",
+    "target": "claude_sonnet_5::academic",
+    "seed": 20261105,
+    "fold": 0,
+    "model": "bertimbau",
+    "manifest_path": "results/protocols/compound-ood-n2-v1/seed20261105/logo_lodo-claude-sonnet-5-4a5e797dcf.parquet",
+    "manifest_sha256": "b32dab07ee456b01b30836dcf41f7dd3fdcc3cc2e6422b6de950a9771a7d46be",
+    "counterfactual_n3s": false
+  },
+  "model_seed": 1080264533,
+  "input_hashes": {
+    "release_manifest": "929d0094a023b32db696b399f409649c9ad95a9e2cf21803dbb4495fe82a8a31",
+    "selected_texts": "66923ae507de39e1a219b3525877a658058a48c8d8e84df6cb166dfee519baef",
+    "task_manifest": "b32dab07ee456b01b30836dcf41f7dd3fdcc3cc2e6422b6de950a9771a7d46be",
+    "evaluation_config": "5f9e9d4d3088bd19ae2141845edff1c1cff13848fadd2125fa414fa47e51f88f",
+    "model_config": "7562e8b1c5ea29b63a957bb33634a53cb21db4e129730626ad85510dbf575d95"
+  },
+  "counts": {
+    "train": 64062,
+    "validation": 16017,
+    "test_scored": 484,
+    "binary_test": 484,
+    "paired_binary_test": 74,
+    "unmatched_target": 0
+  },
+  "id_sha256": {
+    "train": "2740f9a6f9c307352d616d467f2533ffa8cf55ca56b71a7b9da3ffea5bcc49ab",
+    "validation": "cdd9b3525c7ce3aca44d05a1f2e9bd61b495df49e74a16ef3649ffca9efadfb6",
+    "test": "9d04d607a846613d5c9c115ca7e018fde3b57a8d8312da289a533201f6751260"
+  },
+  "model_info": {
+    "model": {
+      "name": "neuralmind/bert-base-portuguese-cased",
+      "revision": "94d69c95f98f7d5b2a8700c420230ae10def0baa",
+      "max_length": 512,
+      "learning_rate": 2e-05,
+      "epochs": 3,
+      "train_batch_size": 16,
+      "inference_batch_size": 32,
+      "gradient_accumulation_steps": 2,
+      "weight_decay": 0.01,
+      "warmup_ratio": 0.1,
+      "max_grad_norm": 1.0,
+      "device": "cuda"
+    },
+    "resolved_revision": "94d69c95f98f7d5b2a8700c420230ae10def0baa",
+    "seed": 1080264533,
+    "positive_class": "synthetic",
+    "train_rows": 64062,
+    "validation_rows": 16017,
+    "test_rows": 484,
+    "train_class_rows": [
+      33208,
+      30854
+    ],
+    "total_optimizer_steps": 6006,
+    "warmup_steps": 601,
+    "best_epoch": 3,
+    "best_validation_loss": 0.012913346582377128,
+    "history": [
+      {
+        "epoch": 1,
+        "train_loss": 0.07343214519357187,
+        "validation_loss": 0.020937546592775243
+      },
+      {
+        "epoch": 2,
+        "train_loss": 0.005580080827506237,
+        "validation_loss": 0.02240180732737542
+      },
+      {
+        "epoch": 3,
+        "train_loss": 0.0011236617051088142,
+        "validation_loss": 0.012913346582377128
+      }
+    ],
+    "token_coverage": {
+      "train": {
+        "rows": 64062,
+        "max_content_tokens": 510,
+        "truncated_rows": 35681,
+        "truncated_rate": 0.5569760544472542,
+        "retained_token_fraction": 0.5497365121366165,
+        "median_content_tokens": 598.0,
+        "p95_content_tokens": 1913.0,
+        "max_content_tokens_observed": 25686
+      },
+      "validation": {
+        "rows": 16017,
+        "max_content_tokens": 510,
+        "truncated_rows": 8974,
+        "truncated_rate": 0.5602797028157582,
+        "retained_token_fraction": 0.5489710523245349,
+        "median_content_tokens": 603.0,
+        "p95_content_tokens": 1935.0,
+        "max_content_tokens_observed": 8807
+      },
+      "test": {
+        "rows": 484,
+        "max_content_tokens": 510,
+        "truncated_rows": 244,
+        "truncated_rate": 0.5041322314049587,
+        "retained_token_fraction": 0.5585534695998712,
+        "median_content_tokens": 530.5,
+        "p95_content_tokens": 1844.1999999999996,
+        "max_content_tokens_observed": 2471
+      }
+    },
+    "torch": "2.8.0+cu128",
+    "transformers": "4.57.6",
+    "gpu": "NVIDIA L40S",
+    "checkpoint_sha256": "402fc1d2b2d1f3a4595200e75dc7a96bbca8fd2ff5681e70e10c90a351ea34b5"
+  },
+  "evaluation": {
+    "validation_thresholds": {
+      "youden": 0.9997852444648743,
+      "fpr_0.01": 0.0050391536206007,
+      "fpr_0.05": 3.3746684493962675e-05
+    },
+    "metrics": {
+      "roc_auc": 1.0,
+      "balanced_accuracy": 1.0,
+      "tpr_at_fpr_0.01": 1.0,
+      "observed_fpr_at_fpr_0.01": 0.05371900826446281,
+      "balanced_accuracy_at_fpr_0.01": 0.9731404958677685,
+      "tpr_at_fpr_0.05": 1.0,
+      "observed_fpr_at_fpr_0.05": 0.19008264462809918,
+      "balanced_accuracy_at_fpr_0.05": 0.9049586776859504
+    },
+    "confidence_intervals_95": {
+      "roc_auc": [
+        0.9999999999999999,
+        1.0
+      ],
+      "balanced_accuracy": [
+        1.0,
+        1.0
+      ],
+      "tpr_at_fpr_0.01": [
+        1.0,
+        1.0
+      ],
+      "observed_fpr_at_fpr_0.01": [
+        0.028925619834710745,
+        0.08298755186721991
+      ],
+      "balanced_accuracy_at_fpr_0.01": [
+        0.95850622406639,
+        0.9855371900826446
+      ],
+      "tpr_at_fpr_0.05": [
+        1.0,
+        1.0
+      ],
+      "observed_fpr_at_fpr_0.05": [
+        0.1410642639141319,
+        0.24066390041493776
+      ],
+      "balanced_accuracy_at_fpr_0.05": [
+        0.8796680497925311,
+        0.929467868042934
+      ]
+    },
+    "interval_note": "Conditional on fitted model and validation thresholds; whole probe_group_id resampled within label."
+  },
+  "paired_iid_test_metrics": {
+    "roc_auc": 1.0,
+    "balanced_accuracy": 1.0,
+    "tpr_at_fpr_0.01": 1.0,
+    "observed_fpr_at_fpr_0.01": 0.05405405405405406,
+    "balanced_accuracy_at_fpr_0.01": 0.972972972972973,
+    "tpr_at_fpr_0.05": 1.0,
+    "observed_fpr_at_fpr_0.05": 0.10810810810810811,
+    "balanced_accuracy_at_fpr_0.05": 0.9459459459459459
+  },
+  "unmatched_target_rates": {},
+  "n3s_inference_only_metrics": null,
+  "predictions_sha256": "6e3c626249cc2d33da01ccb1998e35b73feaa0c8afc448d20071b8301f76b7eb",
+  "warning": "Per-task test groups recur across folds and seeds; these intervals do not make rounds independent. OOD matched controls define the reported binary population."
+}

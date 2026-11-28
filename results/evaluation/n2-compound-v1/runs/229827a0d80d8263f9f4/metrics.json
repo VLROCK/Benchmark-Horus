@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "task": {
+    "task_id": "229827a0d80d8263f9f4",
+    "protocol": "logo_lodo",
+    "target": "llama_3_3_70b::academic",
+    "seed": 20261107,
+    "fold": 2,
+    "model": "char4_svm",
+    "manifest_path": "results/protocols/compound-ood-n2-v1/seed20261107/logo_lodo-llama-3-3-70b-6ebdb13e5e.parquet",
+    "manifest_sha256": "a95c0335ef12aef012daef9bb5e2258d5bd5ca7c4140d3e9653a92c86712aa79",
+    "counterfactual_n3s": false
+  },
+  "model_seed": 384666372,
+  "input_hashes": {
+    "release_manifest": "929d0094a023b32db696b399f409649c9ad95a9e2cf21803dbb4495fe82a8a31",
+    "selected_texts": "66923ae507de39e1a219b3525877a658058a48c8d8e84df6cb166dfee519baef",
+    "task_manifest": "a95c0335ef12aef012daef9bb5e2258d5bd5ca7c4140d3e9653a92c86712aa79",
+    "evaluation_config": "5f9e9d4d3088bd19ae2141845edff1c1cff13848fadd2125fa414fa47e51f88f",
+    "model_config": "7139099119a796aef25b537cf77c5310e3b6d8f03e46620caff818e770d1a445"
+  },
+  "counts": {
+    "train": 61154,
+    "validation": 15288,
+    "test_scored": 1682,
+    "binary_test": 1682,
+    "paired_binary_test": 250,
+    "unmatched_target": 0
+  },
+  "id_sha256": {
+    "train": "9b3919abd0900a93992e55c5f7397ed9e3b808de0e54c2dce9814561e5686c92",
+    "validation": "8a50fcde198e4fbcd5f042408ea274b00f469e0eb8e84be4a77ce0149ddf9f54",
+    "test": "10ba67f999c603cc0f4d1c430368a7cd5643616a0794d454ebb4dd98cd317bdf"
+  },
+  "model_info": {
+    "selected_c": 1.0,
+    "inner_auc_by_c": {
+      "0.1": 0.9998785020913893,
+      "1.0": 0.999923711888485,
+      "10.0": 0.9999178971934608
+    }
+  },
+  "evaluation": {
+    "validation_thresholds": {
+      "youden": -0.05482508286075416,
+      "fpr_0.01": -0.312697243546474,
+      "fpr_0.05": -0.6963512221274902
+    },
+    "metrics": {
+      "roc_auc": 0.9938892745598991,
+      "balanced_accuracy": 0.9137931034482758,
+      "tpr_at_fpr_0.01": 0.9464922711058263,
+      "observed_fpr_at_fpr_0.01": 0.026159334126040427,
+      "balanced_accuracy_at_fpr_0.01": 0.960166468489893,
+      "tpr_at_fpr_0.05": 0.9964328180737217,
+      "observed_fpr_at_fpr_0.05": 0.1581450653983353,
+      "balanced_accuracy_at_fpr_0.05": 0.9191438763376932
+    },
+    "confidence_intervals_95": {
+      "roc_auc": [
+        0.9912997927959568,
+        0.995923286533309
+      ],
+      "balanced_accuracy": [
+        0.9012892799581697,
+        0.9262761699507389
+      ],
+      "tpr_at_fpr_0.01": [
+        0.9322235434007135,
+        0.9607609988109393
+      ],
+      "observed_fpr_at_fpr_0.01": [
+        0.015476190476190477,
+        0.036904761904761905
+      ],
+      "balanced_accuracy_at_fpr_0.01": [
+        0.9506355812241662,
+        0.969138098501907
+      ],
+      "tpr_at_fpr_0.05": [
+        0.9916765755053508,
+        1.0
+      ],
+      "observed_fpr_at_fpr_0.05": [
+        0.13198573127229488,
+        0.18430439952437574
+      ],
+      "balanced_accuracy_at_fpr_0.05": [
+        0.9061743421331353,
+        0.9321442726912406
+      ]
+    },
+    "interval_note": "Conditional on fitted model and validation thresholds; whole probe_group_id resampled within label."
+  },
+  "paired_iid_test_metrics": {
+    "roc_auc": 0.9939836149513569,
+    "balanced_accuracy": 0.8968253968253967,
+    "tpr_at_fpr_0.01": 0.9047619047619048,
+    "observed_fpr_at_fpr_0.01": 0.016129032258064516,
+    "balanced_accuracy_at_fpr_0.01": 0.9443164362519201,
+    "tpr_at_fpr_0.05": 1.0,
+    "observed_fpr_at_fpr_0.05": 0.12903225806451613,
+    "balanced_accuracy_at_fpr_0.05": 0.935483870967742
+  },
+  "unmatched_target_rates": {},
+  "n3s_inference_only_metrics": null,
+  "predictions_sha256": "2791a6b4c4698f0150a072d0bd70fe0b6f20336f20ee65eb6869b649e45dd782",
+  "warning": "Per-task test groups recur across folds and seeds; these intervals do not make rounds independent. OOD matched controls define the reported binary population."
+}
